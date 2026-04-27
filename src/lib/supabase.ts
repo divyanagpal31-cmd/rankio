@@ -1,14 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  // Keep this non-throwing so the UI can still render in mock/demo mode.
-  console.warn("Supabase env vars missing: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY");
+  throw new Error("Missing Supabase environment variables");
 }
 
-export const supabase = createClient(
-  supabaseUrl ?? "http://localhost:54321",
-  supabaseAnonKey ?? "demo-key-not-for-production"
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

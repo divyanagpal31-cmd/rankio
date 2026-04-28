@@ -121,7 +121,7 @@ export function Subscription() {
     }
 
     const parts = ["Thanks — we’ll reach out shortly."];
-    if (leadId) parts.push(`Lead ID: ${leadId}.`);
+    /* if (leadId) parts.push(`Lead ID: ${leadId}.`); */
     if (emailSent === false) parts.push("Email sending is currently disabled/misconfigured.");
     setSubmitSuccess(parts.join(" "));
   };

@@ -54,7 +54,8 @@ export async function submitPlanLead(
     }
 
     return {
-      error: "Lead service is not configured. Please deploy the `lead-notify` Edge Function (or allow inserts into `leads`).",
+      error:
+        "Lead service is not configured. Deploy the `lead-notify` Edge Function and set it to public (verify_jwt=false), or allow client inserts into `leads`.",
     };
   }
   const ctx = (error as any)?.context as Response | undefined;

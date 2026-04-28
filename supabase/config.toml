@@ -1,0 +1,5 @@
+[functions.lead-notify]
+# Allow unauthenticated users to submit the subscription enquiry form.
+# The function uses the service role key internally to write to `leads`.
+verify_jwt = false
+

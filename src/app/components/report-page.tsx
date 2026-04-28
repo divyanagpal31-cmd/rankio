@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import { useReports } from "../services/data-hooks";
 import { useAuth } from "../providers/auth-provider";
 import { AuthModal } from "./auth-modal";
+import { Footer } from "./footer";
 import { supabase } from "../../lib/supabase";
 import { runScan } from "../services/scan-service";
 
@@ -514,7 +515,7 @@ export function ReportPage() {
 
   return (
     <>
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-white backdrop-blur-md">
         <div className="container mx-auto px-4 md:px-6">
@@ -530,7 +531,7 @@ export function ReportPage() {
        </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 md:px-6 py-8 max-w-6xl">
+      <main className="container mx-auto px-4 md:px-6 py-8 max-w-6xl flex-1">
         {/* Back Button */}
         <button
           type="button"
@@ -872,6 +873,8 @@ export function ReportPage() {
           </CardContent>
         </Card>
       </main>
+
+      <Footer variant="app" />
     </div>
     <AuthModal
       open={authOpen}

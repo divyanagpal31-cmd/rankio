@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { useWebsites } from "../../services/data-hooks";
 import { useAuth } from "../../providers/auth-provider";
-import { runScan } from "../../services/scan-service";
+import { getScanLimitGate, runScan } from "../../services/scan-service";
 import { supabase } from "../../../lib/supabase";
 import { ScanningModal } from "../scanning-modal";
 import {
@@ -55,13 +55,23 @@ export function MyWebsites() {
     setIsScanning(id);
     setActionError(null);
 
+    const gate = getScanLimitGate();
+    if (gate) {
+      const from = `${location.pathname}${location.search}`;
+      navigate(gate.upgradeUrl || "/dashboard/subscription", {
+        state: { from, reason: "scan_limit", limit: gate.limit ?? 3 },
+      });
+      setIsScanning(null);
+      return;
+    }
+
     setScanTargetUrl(url);
 
     let modalOpened = false;
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 900);
+    }, 1800);
 
     // Call Edge Function; it will return a cached report if fresh (<12h)
     const { data, error, errorCode, limit, upgradeUrl } = await runScan(url);
@@ -119,11 +129,21 @@ export function MyWebsites() {
 
     setScanTargetUrl(normalized);
 
+    const gate = getScanLimitGate();
+    if (gate) {
+      const from = `${location.pathname}${location.search}`;
+      navigate(gate.upgradeUrl || "/dashboard/subscription", {
+        state: { from, reason: "scan_limit", limit: gate.limit ?? 3 },
+      });
+      setAdding(false);
+      return;
+    }
+
     let modalOpened = false;
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 900);
+    }, 1800);
     const { data, error: scanErr, errorCode, limit, upgradeUrl } = await runScan(normalized);
     window.clearTimeout(modalTimer);
     setAdding(false);

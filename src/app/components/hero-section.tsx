@@ -4,7 +4,7 @@ import { Input } from "./ui/input";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { ScanningModal } from "./scanning-modal";
-import { runScan } from "../services/scan-service";
+import { getScanLimitGate, runScan } from "../services/scan-service";
 import { useNavigate } from "react-router";
 
 export function HeroSection() {
@@ -46,13 +46,20 @@ export function HeroSection() {
   const handleScanWebsite = async () => {
     if (!validateUrl(websiteUrl)) return;
     setScanError(null);
+
+    const gate = getScanLimitGate();
+    if (gate) {
+      navigate(gate.upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: gate.limit ?? 3 } });
+      return;
+    }
+
     setIsScanning(true);
 
     let modalOpened = false;
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 900);
+    }, 1800);
 
     const { data, error, errorCode, limit, upgradeUrl } = await runScan(websiteUrl);
     window.clearTimeout(modalTimer);

@@ -71,7 +71,20 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (submitting) return;
+            if (phase === "send") {
+              if (!email) return;
+              handleSend();
+              return;
+            }
+            if (code.length !== 8) return;
+            handleVerify();
+          }}
+        >
           {phase === "send" && (
             <>
               <div className="space-y-2">
@@ -123,7 +136,7 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
 
           {phase === "send" && (
             <Button
-              onClick={handleSend}
+              type="submit"
               disabled={!email || submitting}
               className="w-full bg-accent hover:bg-accent/90 text-white"
             >
@@ -134,7 +147,7 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
 
           {phase === "verify" && (
             <Button
-              onClick={handleVerify}
+              type="submit"
               disabled={code.length !== 8 || submitting}
               className="w-full bg-accent hover:bg-accent/90 text-white"
             >
@@ -146,7 +159,7 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
           <p className="text-xs text-muted-foreground">
             We'll email you a one-time 8-digit code. No password needed.
           </p>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

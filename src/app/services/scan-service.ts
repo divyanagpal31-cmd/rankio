@@ -16,6 +16,57 @@ export type ScanResult = {
 
 export type ScanErrorCode = "SCAN_LIMIT_REACHED";
 
+type ScanLimitGate = {
+  limit?: number;
+  used?: number;
+  upgradeUrl?: string;
+  expiresAt: number;
+};
+
+const scanLimitGateTtlMs = 10 * 60 * 1000;
+
+function scanLimitGateKey(visitorId: string) {
+  return `rankio.scan_limit_gate.${visitorId}`;
+}
+
+export function getScanLimitGate(): Omit<ScanLimitGate, "expiresAt"> | null {
+  if (typeof window === "undefined") return null;
+  const visitorId = getOrCreateVisitorId();
+  try {
+    const raw = localStorage.getItem(scanLimitGateKey(visitorId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ScanLimitGate;
+    if (!parsed?.expiresAt || Date.now() > parsed.expiresAt) {
+      localStorage.removeItem(scanLimitGateKey(visitorId));
+      return null;
+    }
+    return { limit: parsed.limit, used: parsed.used, upgradeUrl: parsed.upgradeUrl };
+  } catch {
+    return null;
+  }
+}
+
+export function clearScanLimitGate() {
+  if (typeof window === "undefined") return;
+  const visitorId = getOrCreateVisitorId();
+  try {
+    localStorage.removeItem(scanLimitGateKey(visitorId));
+  } catch {
+    // ignore
+  }
+}
+
+function setScanLimitGate(value: { limit?: number; used?: number; upgradeUrl?: string }) {
+  if (typeof window === "undefined") return;
+  const visitorId = getOrCreateVisitorId();
+  try {
+    const payload: ScanLimitGate = { ...value, expiresAt: Date.now() + scanLimitGateTtlMs };
+    localStorage.setItem(scanLimitGateKey(visitorId), JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Calls the Supabase Edge Function "scan" which wraps PageSpeed Insights.
  * It returns a cached report if a fresh one (<12h) exists, otherwise runs a new scan.
@@ -29,8 +80,9 @@ export async function runScan(url: string): Promise<{
   used?: number;
   upgradeUrl?: string;
 }> {
+  const visitorId = getOrCreateVisitorId();
   const { data, error } = await supabase.functions.invoke("scan", {
-    body: { url, visitor_id: getOrCreateVisitorId() },
+    body: { url, visitor_id: visitorId },
   });
 
   if (error) {
@@ -52,6 +104,9 @@ export async function runScan(url: string): Promise<{
             const upgradeUrl = String(parsed?.upgrade_url ?? "").trim() || undefined;
 
             const msg = message || (code && code !== "SCAN_LIMIT_REACHED" ? code : "");
+            if (code === "SCAN_LIMIT_REACHED") {
+              setScanLimitGate({ limit, used, upgradeUrl });
+            }
             if (code && details) return { error: msg ? `${msg}: ${details}` : details, errorCode: code, status, limit, used, upgradeUrl };
             if (code) return { error: msg || code, errorCode: code, status, limit, used, upgradeUrl };
           } catch {
@@ -66,5 +121,6 @@ export async function runScan(url: string): Promise<{
     return { error: defaultMsg };
   }
 
+  clearScanLimitGate();
   return { data: data as ScanResult };
 }

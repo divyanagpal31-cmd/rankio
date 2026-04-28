@@ -4,7 +4,7 @@ import { Input } from "./ui/input";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ScanningModal } from "./scanning-modal";
-import { runScan } from "../services/scan-service";
+import { getScanLimitGate, runScan } from "../services/scan-service";
 
 export function FinalCTA() {
   const [url, setUrl] = useState("");
@@ -45,13 +45,20 @@ export function FinalCTA() {
   const handleStartScan = () => {
     if (!validateUrl(url)) return;
     setScanError(null);
+
+    const gate = getScanLimitGate();
+    if (gate) {
+      navigate(gate.upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: gate.limit ?? 3 } });
+      return;
+    }
+
     setIsScanning(true);
 
     let modalOpened = false;
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 900);
+    }, 1800);
 
     runScan(url).then(({ data, error: scanErr, errorCode, limit, upgradeUrl }) => {
       window.clearTimeout(modalTimer);

@@ -57,12 +57,6 @@ serve(async (req) => {
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
-  if (!resendKey) {
-    return new Response(JSON.stringify({ error: "MISSING_RESEND_API_KEY", message: "Missing RESEND_API_KEY" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
-  }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -152,6 +146,14 @@ serve(async (req) => {
   const html = lines
     .map((l) => l.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"))
     .join("<br/>");
+
+  if (!resendKey) {
+    // Lead is saved already; allow environments without email configured.
+    return new Response(JSON.stringify({ ok: true, lead_id: leadId, email_sent: false, email_error: "MISSING_RESEND_API_KEY" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+  }
 
   const resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",

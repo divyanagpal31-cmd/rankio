@@ -26,10 +26,22 @@ export async function submitPlanLead(payload: LeadPayload): Promise<{ error?: st
     lower.includes("edge function returned a non-2xx status code") ||
     lower.includes("not found")
   ) {
-    // Don’t block the user if the notification service is temporarily unavailable.
-    // (This can happen if the Edge Function isn't deployed in an environment yet.)
-    // We intentionally avoid attempting direct DB inserts here because RLS may reject them.
-    return {};
+    const { error: insertErr } = await supabase.from("leads").insert({
+      plan: payload.plan,
+      full_name: payload.full_name?.trim() || null,
+      email: payload.email,
+      company: payload.company?.trim() || null,
+      phone: payload.phone?.trim() || null,
+      website: payload.website?.trim() || null,
+      notes: payload.notes?.trim() || null,
+      source: payload.source?.trim() || null,
+    });
+
+    if (!insertErr) return {};
+
+    return {
+      error: "Lead service is not configured. Please deploy the `lead-notify` Edge Function (or allow inserts into `leads`).",
+    };
   }
   const ctx = (error as any)?.context as Response | undefined;
   if (ctx && typeof ctx.text === "function") {

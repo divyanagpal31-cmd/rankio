@@ -103,7 +103,7 @@ export function Subscription() {
     }
 
     setSubmitting(true);
-    const { error } = await submitPlanLead({
+    const { error, leadId, emailSent } = await submitPlanLead({
       plan: selectedPlan.name,
       full_name: fullName.trim(),
       email: e,
@@ -120,7 +120,10 @@ export function Subscription() {
       return;
     }
 
-    setSubmitSuccess("Thanks — we’ll reach out shortly.");
+    const parts = ["Thanks — we’ll reach out shortly."];
+    if (leadId) parts.push(`Lead ID: ${leadId}.`);
+    if (emailSent === false) parts.push("Email sending is currently disabled/misconfigured.");
+    setSubmitSuccess(parts.join(" "));
   };
 
   return (

@@ -11,10 +11,17 @@ export type LeadPayload = {
   source?: string;
 };
 
-export async function submitPlanLead(payload: LeadPayload): Promise<{ error?: string }> {
-  const { error } = await supabase.functions.invoke("lead-notify", { body: payload });
+export async function submitPlanLead(
+  payload: LeadPayload,
+): Promise<{ error?: string; leadId?: string; emailSent?: boolean }> {
+  const { data, error } = await supabase.functions.invoke("lead-notify", { body: payload });
 
-  if (!error) return {};
+  if (!error) {
+    const leadId = String((data as any)?.lead_id ?? (data as any)?.leadId ?? "").trim() || undefined;
+    const emailSentRaw = (data as any)?.email_sent ?? (data as any)?.emailSent;
+    const emailSent = typeof emailSentRaw === "boolean" ? emailSentRaw : undefined;
+    return { leadId, emailSent };
+  }
 
   const defaultMsg = error.message ?? "Failed to submit";
   const lower = defaultMsg.toLowerCase();
@@ -26,7 +33,9 @@ export async function submitPlanLead(payload: LeadPayload): Promise<{ error?: st
     lower.includes("edge function returned a non-2xx status code") ||
     lower.includes("not found")
   ) {
-    const { error: insertErr } = await supabase.from("leads").insert({
+    const { data: inserted, error: insertErr } = await supabase
+      .from("leads")
+      .insert({
       plan: payload.plan,
       full_name: payload.full_name?.trim() || null,
       email: payload.email,
@@ -35,9 +44,14 @@ export async function submitPlanLead(payload: LeadPayload): Promise<{ error?: st
       website: payload.website?.trim() || null,
       notes: payload.notes?.trim() || null,
       source: payload.source?.trim() || null,
-    });
+    })
+      .select("id")
+      .single();
 
-    if (!insertErr) return {};
+    if (!insertErr) {
+      const leadId = String((inserted as any)?.id ?? "").trim() || undefined;
+      return { leadId, emailSent: false };
+    }
 
     return {
       error: "Lead service is not configured. Please deploy the `lead-notify` Edge Function (or allow inserts into `leads`).",

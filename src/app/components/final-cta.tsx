@@ -58,7 +58,7 @@ export function FinalCTA() {
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 1800);
+    }, 6000);
 
     runScan(url).then(({ data, error: scanErr, errorCode, limit, upgradeUrl }) => {
       window.clearTimeout(modalTimer);

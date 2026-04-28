@@ -71,7 +71,7 @@ export function MyWebsites() {
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 1800);
+    }, 6000);
 
     // Call Edge Function; it will return a cached report if fresh (<12h)
     const { data, error, errorCode, limit, upgradeUrl } = await runScan(url);
@@ -143,7 +143,7 @@ export function MyWebsites() {
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 1800);
+    }, 6000);
     const { data, error: scanErr, errorCode, limit, upgradeUrl } = await runScan(normalized);
     window.clearTimeout(modalTimer);
     setAdding(false);

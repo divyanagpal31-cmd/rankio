@@ -59,7 +59,7 @@ export function HeroSection() {
     const modalTimer = window.setTimeout(() => {
       modalOpened = true;
       setScanningModalOpen(true);
-    }, 1800);
+    }, 6000);
 
     const { data, error, errorCode, limit, upgradeUrl } = await runScan(websiteUrl);
     window.clearTimeout(modalTimer);

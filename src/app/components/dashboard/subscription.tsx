@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { useLocation } from "react-router";
 import { Button } from "../ui/button";
@@ -16,6 +16,15 @@ import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { useAuth } from "../../providers/auth-provider";
 import { submitPlanLead } from "../../services/lead-service";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: HTMLElement, options: Record<string, unknown>) => string;
+      reset: (widgetId: string) => void;
+    };
+  }
+}
 
 type Plan = {
   id: "free" | "professional" | "agency";
@@ -55,6 +64,29 @@ const plans: Plan[] = [
   },
 ];
 
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeWebsite(raw: string): string {
+  let input = raw.trim();
+  if (!input) throw new Error("Website is required");
+  if (!/^https?:\/\//i.test(input)) input = `https://${input}`;
+  const url = new URL(input);
+  if (!/^https?:$/.test(url.protocol)) throw new Error("Invalid protocol");
+  url.hash = "";
+  if (url.pathname === "/") url.pathname = "";
+  return url.toString().replace(/\/$/, "");
+}
+
+function isValidPhone(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true; // optional
+  if (!/^[0-9+()\\-\\s.]{7,30}$/.test(trimmed)) return false;
+  const digits = trimmed.replace(/\\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
+}
+
 export function Subscription() {
   const location = useLocation();
   const { user } = useAuth();
@@ -82,36 +114,125 @@ export function Subscription() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
+  const [fullNameError, setFullNameError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [websiteError, setWebsiteError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  const turnstileSiteKey = (import.meta as any).env?.VITE_TURNSTILE_SITE_KEY as string | undefined;
+  const turnstileRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetIdRef = useRef<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
+
   const openPlan = (plan: Plan) => {
     setSelectedPlan(plan);
     setSubmitError(null);
     setSubmitSuccess(null);
+    setFullNameError(null);
+    setEmailError(null);
+    setWebsiteError(null);
+    setPhoneError(null);
+    setTurnstileToken("");
     if (!fullName && defaultName) setFullName(defaultName);
     if (!email && user?.email) setEmail(String(user.email).trim());
     setDialogOpen(true);
   };
 
+  useEffect(() => {
+    if (!dialogOpen) return;
+    if (!turnstileSiteKey) return;
+    if (!turnstileRef.current) return;
+    if (!window.turnstile?.render) return;
+
+    const existing = turnstileWidgetIdRef.current;
+    if (existing && window.turnstile?.reset) {
+      try {
+        window.turnstile.reset(existing);
+        setTurnstileToken("");
+        return;
+      } catch {
+        // ignore
+      }
+    }
+
+    try {
+      const widgetId = window.turnstile.render(turnstileRef.current, {
+        sitekey: turnstileSiteKey,
+        theme: "light",
+        callback: (token: string) => setTurnstileToken(String(token ?? "")),
+        "error-callback": () => setTurnstileToken(""),
+        "expired-callback": () => setTurnstileToken(""),
+      });
+      turnstileWidgetIdRef.current = widgetId;
+    } catch {
+      // ignore
+    }
+  }, [dialogOpen, turnstileSiteKey]);
+
   const onSubmit = async () => {
     if (!selectedPlan) return;
     setSubmitError(null);
     setSubmitSuccess(null);
+    setFullNameError(null);
+    setEmailError(null);
+    setWebsiteError(null);
+    setPhoneError(null);
 
+    const name = fullName.trim();
     const e = email.trim();
-    if (!e) {
-      setSubmitError("Email is required.");
-      return;
+    const w = website.trim();
+    const p = phone.trim();
+
+    let hasError = false;
+    if (!name) {
+      setFullNameError("Full name is required.");
+      hasError = true;
     }
+    if (!e) {
+      setEmailError("Email is required.");
+      hasError = true;
+    } else if (!isValidEmail(e)) {
+      setEmailError("Please enter a valid email address.");
+      hasError = true;
+    }
+    if (!w) {
+      setWebsiteError("Website is required.");
+      hasError = true;
+    } else {
+      try {
+        normalizeWebsite(w);
+      } catch {
+        setWebsiteError("Please enter a valid website URL (e.g. https://example.com).");
+        hasError = true;
+      }
+    }
+    if (!isValidPhone(p)) {
+      setPhoneError("Please enter a valid phone number.");
+      hasError = true;
+    }
+    if (turnstileSiteKey && !turnstileToken) {
+      setSubmitError("Please complete the CAPTCHA.");
+      hasError = true;
+    }
+    if (hasError) return;
 
     setSubmitting(true);
+    let normalizedWebsite = w;
+    try {
+      normalizedWebsite = normalizeWebsite(w);
+    } catch {
+      // validated above
+    }
     const { error, leadId, emailSent } = await submitPlanLead({
       plan: selectedPlan.name,
-      full_name: fullName.trim(),
+      full_name: name,
       email: e,
       company: company.trim(),
-      phone: phone.trim(),
-      website: website.trim(),
+      phone: p,
+      website: normalizedWebsite,
       notes: notes.trim(),
       source: showLimitBanner ? "scan_limit" : "subscription_page",
+      captcha_token: turnstileToken || undefined,
     });
     setSubmitting(false);
 
@@ -121,7 +242,7 @@ export function Subscription() {
     }
 
     const parts = ["Thanks — we’ll reach out shortly."];
-    /* if (leadId) parts.push(`Lead ID: ${leadId}.`); */
+    if (leadId) parts.push(`Lead ID: ${leadId}.`);
     if (emailSent === false) parts.push("Email sending is currently disabled/misconfigured.");
     setSubmitSuccess(parts.join(" "));
   };
@@ -214,7 +335,8 @@ export function Subscription() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="lead-full-name">Full name</Label>
-                <Input id="lead-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                <Input id="lead-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                {fullNameError && <p className="text-xs text-red-600">{fullNameError}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lead-email">Email</Label>
@@ -225,6 +347,7 @@ export function Subscription() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
+                {emailError && <p className="text-xs text-red-600">{emailError}</p>}
               </div>
             </div>
 
@@ -236,12 +359,14 @@ export function Subscription() {
               <div className="space-y-2">
                 <Label htmlFor="lead-phone">Phone</Label>
                 <Input id="lead-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                {phoneError && <p className="text-xs text-red-600">{phoneError}</p>}
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="lead-website">Website</Label>
-              <Input id="lead-website" value={website} onChange={(e) => setWebsite(e.target.value)} />
+              <Input id="lead-website" value={website} onChange={(e) => setWebsite(e.target.value)} required />
+              {websiteError && <p className="text-xs text-red-600">{websiteError}</p>}
             </div>
 
             <div className="space-y-2">
@@ -253,6 +378,14 @@ export function Subscription() {
                 placeholder="Anything we should know (goals, number of sites, timeline, etc.)"
               />
             </div>
+
+            {turnstileSiteKey && (
+              <div className="space-y-2">
+                <Label>CAPTCHA</Label>
+                <div ref={turnstileRef} />
+                <p className="text-xs text-muted-foreground">This helps prevent spam submissions.</p>
+              </div>
+            )}
 
             {submitError && <p className="text-sm text-red-600">{submitError}</p>}
             {submitSuccess && <p className="text-sm text-green-700">{submitSuccess}</p>}

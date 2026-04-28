@@ -9,6 +9,7 @@ export type LeadPayload = {
   website?: string;
   notes?: string;
   source?: string;
+  captcha_token?: string;
 };
 
 export async function submitPlanLead(
@@ -36,15 +37,15 @@ export async function submitPlanLead(
     const { data: inserted, error: insertErr } = await supabase
       .from("leads")
       .insert({
-      plan: payload.plan,
-      full_name: payload.full_name?.trim() || null,
-      email: payload.email,
-      company: payload.company?.trim() || null,
-      phone: payload.phone?.trim() || null,
-      website: payload.website?.trim() || null,
-      notes: payload.notes?.trim() || null,
-      source: payload.source?.trim() || null,
-    })
+        plan: payload.plan,
+        full_name: payload.full_name?.trim() || null,
+        email: payload.email,
+        company: payload.company?.trim() || null,
+        phone: payload.phone?.trim() || null,
+        website: payload.website?.trim() || null,
+        notes: payload.notes?.trim() || null,
+        source: payload.source?.trim() || null,
+      })
       .select("id")
       .single();
 

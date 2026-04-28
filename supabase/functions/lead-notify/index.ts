@@ -16,6 +16,7 @@ type LeadPayload = {
   website?: string;
   notes?: string;
   source?: string;
+  captcha_token?: string;
 };
 
 function isValidEmail(value: string): boolean {
@@ -44,6 +45,7 @@ serve(async (req) => {
   const resendKey = Deno.env.get("RESEND_API_KEY") ?? "";
   const adminEmail = Deno.env.get("ADMIN_EMAIL") ?? "divya.nagpal31@gmail.com";
   const fromEmail = Deno.env.get("LEAD_FROM_EMAIL") ?? "Rankio <onboarding@resend.dev>";
+  const turnstileSecret = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
 
   if (!supabaseUrl) {
     return new Response(JSON.stringify({ error: "MISSING_SUPABASE_URL", message: "Missing SUPABASE_URL" }), {
@@ -78,6 +80,7 @@ serve(async (req) => {
   const website = readString(body.website, 500);
   const notes = readString(body.notes, 5000);
   const source = readString(body.source, 200);
+  const captchaToken = readString(body.captcha_token, 5000);
 
   if (!email) {
     return new Response(JSON.stringify({ error: "EMAIL_REQUIRED", message: "Email is required" }), {
@@ -90,6 +93,40 @@ serve(async (req) => {
       status: 400,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
+  }
+
+  if (turnstileSecret) {
+    if (!captchaToken) {
+      return new Response(JSON.stringify({ error: "CAPTCHA_REQUIRED", message: "CAPTCHA is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    const form = new URLSearchParams();
+    form.set("secret", turnstileSecret);
+    form.set("response", captchaToken);
+
+    const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+
+    if (!verifyRes.ok) {
+      return new Response(JSON.stringify({ error: "CAPTCHA_VERIFY_FAILED", message: "Failed to verify CAPTCHA" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    const verifyJson = (await verifyRes.json().catch(() => null)) as any;
+    if (!verifyJson?.success) {
+      return new Response(JSON.stringify({ error: "CAPTCHA_INVALID", message: "Invalid CAPTCHA" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
   }
 
   const createdAt = new Date().toISOString();

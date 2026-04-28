@@ -464,10 +464,15 @@ export function ReportPage() {
     }
 
     setRescanning(true);
-    const { data, error } = await runScan(String(scanUrl));
+    const { data, error, errorCode, limit, upgradeUrl } = await runScan(String(scanUrl));
     setRescanning(false);
 
     if (error) {
+      if (errorCode === "SCAN_LIMIT_REACHED") {
+        const from = `${location.pathname}${location.search}`;
+        navigate(upgradeUrl || "/dashboard/subscription", { state: { from, reason: "scan_limit", limit: limit ?? 3 } });
+        return;
+      }
       setRescanMessage(error);
       return;
     }

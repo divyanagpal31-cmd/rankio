@@ -12,6 +12,7 @@ import {
 } from "../ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { useAuth } from "../../providers/auth-provider";
+import { Footer } from "../footer";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
@@ -33,7 +34,7 @@ export function DashboardLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-white backdrop-blur-md">
         <div className="flex h-16 items-center justify-between px-6">
@@ -98,7 +99,7 @@ export function DashboardLayout() {
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex flex-1">
         {/* Sidebar Navigation - Desktop */}
         <aside className="hidden md:block w-64 min-h-[calc(100vh-4rem)] border-r border-border/40 bg-white sticky top-16">
           <nav className="p-4 space-y-1">
@@ -186,6 +187,8 @@ export function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+
+      <Footer variant="app" />
     </div>
   );
 }

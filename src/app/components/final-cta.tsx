@@ -45,13 +45,25 @@ export function FinalCTA() {
   const handleStartScan = () => {
     if (!validateUrl(url)) return;
     setScanError(null);
-    setScanningModalOpen(true);
     setIsScanning(true);
-    runScan(url).then(({ data, error: scanErr }) => {
+
+    let modalOpened = false;
+    const modalTimer = window.setTimeout(() => {
+      modalOpened = true;
+      setScanningModalOpen(true);
+    }, 900);
+
+    runScan(url).then(({ data, error: scanErr, errorCode, limit, upgradeUrl }) => {
+      window.clearTimeout(modalTimer);
       setIsScanning(false);
       if (scanErr) {
+        if (errorCode === "SCAN_LIMIT_REACHED") {
+          if (modalOpened) setScanningModalOpen(false);
+          navigate(upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: limit ?? 3 } });
+          return;
+        }
         setScanError(scanErr);
-        setScanningModalOpen(false);
+        if (modalOpened) setScanningModalOpen(false);
         return;
       }
       if (data?.id) {
@@ -60,11 +72,11 @@ export function FinalCTA() {
         } catch {
           // ignore storage failures (quota/private mode)
         }
-        setScanningModalOpen(false);
+        if (modalOpened) setScanningModalOpen(false);
         navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from: "/", report: data } });
         return;
       }
-      setScanningModalOpen(false);
+      if (modalOpened) setScanningModalOpen(false);
       navigate("/report");
     });
   };

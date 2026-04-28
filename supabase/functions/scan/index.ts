@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.210.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-const scanVersion = "2026-04-24-visitor-claim-1";
+const scanVersion = "2026-04-27-free-limit-v3";
+const freeScanLimit = 3;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,6 +148,54 @@ function hasAllCategoryScores(rawScanData: any): boolean {
   return keys.every((key) => typeof categories?.[key]?.score === "number");
 }
 
+type SubscriptionRow = {
+  status?: string | null;
+  current_period_end?: string | null;
+  plan?: string | null;
+};
+
+function isSubscriptionActive(row: SubscriptionRow | null, now: Date): boolean {
+  if (!row) return false;
+  const status = String(row.status ?? "").toLowerCase();
+  const activeStatus = status === "active" || status === "trialing";
+  if (!activeStatus) return false;
+  const endRaw = String(row.current_period_end ?? "").trim();
+  if (!endRaw) return true;
+  const end = new Date(endRaw);
+  if (Number.isNaN(end.getTime())) return true;
+  return end.getTime() > now.getTime();
+}
+
+async function canBypassFreeLimit(supabase: any, userId: string | null, now: Date): Promise<boolean> {
+  if (!userId) return false;
+  const { data } = await supabase
+    .from("subscriptions")
+    .select("status, current_period_end, plan")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
+  return isSubscriptionActive((data ?? null) as SubscriptionRow | null, now);
+}
+
+async function getReportCount(supabase: any, opts: { userId: string | null; visitorId: string | null }): Promise<number> {
+  if (opts.userId) {
+    const { count } = await supabase
+      .from("reports")
+      .select("id, websites!inner(user_id)", { count: "exact", head: true })
+      .eq("websites.user_id", opts.userId)
+      .limit(1);
+    return typeof count === "number" ? count : 0;
+  }
+
+  const { count } = await supabase
+    .from("reports")
+    .select("id", { count: "exact", head: true })
+    .eq("visitor_id", opts.visitorId)
+    .limit(1);
+
+  return typeof count === "number" ? count : 0;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
@@ -215,7 +264,25 @@ serve(async (req) => {
   }
   const freshSince = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
 
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  const bypassFreeLimit = await canBypassFreeLimit(supabase, userId, now);
+  if (!bypassFreeLimit) {
+    const used = await getReportCount(supabase, { userId, visitorId });
+    if (used >= freeScanLimit) {
+      return new Response(
+        JSON.stringify({
+          error: "SCAN_LIMIT_REACHED",
+          message: `You’ve reached the free limit of ${freeScanLimit} scans. Upgrade to continue scanning.`,
+          limit: freeScanLimit,
+          used,
+          upgrade_url: userId ? "/dashboard/subscription" : "/#pricing",
+        }),
+        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+  }
 
   // Find or create an owner-specific website row (user_id OR visitor_id).
   const websiteQuery = supabase
@@ -278,7 +345,9 @@ serve(async (req) => {
   if (cached && hasAllCategoryScores((cached as any).raw_scan_data)) {
     if ((cached as any).website_id === site.id) {
       const { websites: _w, ...rest } = cached as any;
-      return new Response(JSON.stringify(rest), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+      return new Response(JSON.stringify({ ...rest, cached: true }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     const { websites: _w, id: _id, website_id: _wid, generated_at: _ga, ...rest } = cached as any;
@@ -303,7 +372,9 @@ serve(async (req) => {
       );
     }
 
-    return new Response(JSON.stringify(cloned), { headers: { "Content-Type": "application/json", ...corsHeaders } });
+    return new Response(JSON.stringify({ ...(cloned as any), cached: true }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 
   // Explicitly request all Lighthouse categories. Some PSI responses may omit
@@ -360,7 +431,7 @@ serve(async (req) => {
     );
   }
 
-  return new Response(JSON.stringify(report as ReportRow), {
+  return new Response(JSON.stringify({ ...(report as any as ReportRow), cached: false }), {
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
 });

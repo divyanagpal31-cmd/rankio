@@ -24,7 +24,7 @@ export function Pricing() {
       price: "0",
       description: "For early-stage founders testing AI readiness",
       features: [
-        "1 website scan",
+        "3 scans (lifetime)",
         "Basic AI readiness score",
         "Limited insights preview"
       ],

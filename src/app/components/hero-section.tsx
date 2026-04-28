@@ -46,14 +46,26 @@ export function HeroSection() {
   const handleScanWebsite = async () => {
     if (!validateUrl(websiteUrl)) return;
     setScanError(null);
-    setScanningModalOpen(true);
     setIsScanning(true);
-    const { data, error } = await runScan(websiteUrl);
+
+    let modalOpened = false;
+    const modalTimer = window.setTimeout(() => {
+      modalOpened = true;
+      setScanningModalOpen(true);
+    }, 900);
+
+    const { data, error, errorCode, limit, upgradeUrl } = await runScan(websiteUrl);
+    window.clearTimeout(modalTimer);
     setIsScanning(false);
 
     if (error) {
+      if (errorCode === "SCAN_LIMIT_REACHED") {
+        if (modalOpened) setScanningModalOpen(false);
+        navigate(upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: limit ?? 3 } });
+        return;
+      }
       setScanError(error);
-      setScanningModalOpen(false);
+      if (modalOpened) setScanningModalOpen(false);
       return;
     }
 
@@ -63,12 +75,12 @@ export function HeroSection() {
       } catch {
         // ignore storage failures (quota/private mode)
       }
-      setScanningModalOpen(false);
+      if (modalOpened) setScanningModalOpen(false);
       navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from: "/", report: data } });
       return;
     }
 
-    setScanningModalOpen(false);
+    if (modalOpened) setScanningModalOpen(false);
     navigate("/report");
   };
 

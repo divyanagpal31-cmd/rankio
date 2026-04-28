@@ -56,17 +56,31 @@ export function MyWebsites() {
     setActionError(null);
 
     setScanTargetUrl(url);
-    setScanningModalOpen(true);
+
+    let modalOpened = false;
+    const modalTimer = window.setTimeout(() => {
+      modalOpened = true;
+      setScanningModalOpen(true);
+    }, 900);
 
     // Call Edge Function; it will return a cached report if fresh (<12h)
-    const { data, error } = await runScan(url);
+    const { data, error, errorCode, limit, upgradeUrl } = await runScan(url);
+    window.clearTimeout(modalTimer);
     if (error) {
+      if (modalOpened) setScanningModalOpen(false);
+      if (errorCode === "SCAN_LIMIT_REACHED") {
+        const from = `${location.pathname}${location.search}`;
+        navigate(upgradeUrl || "/dashboard/subscription", {
+          state: { from, reason: "scan_limit", limit: limit ?? 3 },
+        });
+        setIsScanning(null);
+        return;
+      }
       setActionError(error);
-      setScanningModalOpen(false);
     } else {
       refetch();
       const from = `${location.pathname}${location.search}`;
-      setScanningModalOpen(false);
+      if (modalOpened) setScanningModalOpen(false);
       navigate(data?.id ? `/report?reportId=${encodeURIComponent(data.id)}` : "/report", {
         state: { from, report: data },
       });
@@ -100,53 +114,36 @@ export function MyWebsites() {
 
     const normalized = normalizeUrl(newWebsiteUrl);
 
-    // If user already added this site, just scan it again.
-    const { data: existing, error: existingErr } = await supabase
-      .from("websites")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("normalized_url", normalized)
-      .limit(1)
-      .maybeSingle();
-
-    if (existingErr) {
-      setAdding(false);
-      setActionError(existingErr.message);
-      return;
-    }
-
-    if (!existing) {
-      const { error: insertErr } = await supabase.from("websites").insert({
-        user_id: user.id,
-        url: normalized,
-        normalized_url: normalized,
-      });
-
-      if (insertErr) {
-        setAdding(false);
-        setActionError(insertErr.message);
-        return;
-      }
-    }
-
     setAddOpen(false);
     setNewWebsiteUrl("");
-    refetch();
 
     setScanTargetUrl(normalized);
-    setScanningModalOpen(true);
-    const { data, error: scanErr } = await runScan(normalized);
+
+    let modalOpened = false;
+    const modalTimer = window.setTimeout(() => {
+      modalOpened = true;
+      setScanningModalOpen(true);
+    }, 900);
+    const { data, error: scanErr, errorCode, limit, upgradeUrl } = await runScan(normalized);
+    window.clearTimeout(modalTimer);
     setAdding(false);
 
     if (scanErr) {
+      if (modalOpened) setScanningModalOpen(false);
+      if (errorCode === "SCAN_LIMIT_REACHED") {
+        const from = `${location.pathname}${location.search}`;
+        navigate(upgradeUrl || "/dashboard/subscription", {
+          state: { from, reason: "scan_limit", limit: limit ?? 3 },
+        });
+        return;
+      }
       setActionError(scanErr);
-      setScanningModalOpen(false);
       return;
     }
 
     refetch();
     const from = `${location.pathname}${location.search}`;
-    setScanningModalOpen(false);
+    if (modalOpened) setScanningModalOpen(false);
     navigate(data?.id ? `/report?reportId=${encodeURIComponent(data.id)}` : "/report", {
       state: { from, report: data },
     });

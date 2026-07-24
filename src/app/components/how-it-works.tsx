@@ -1,11 +1,10 @@
-import image_48465712b4d339319e0650703ff691d0ee522582 from '../../assets/48465712b4d339319e0650703ff691d0ee522582.png'
-import image_98b02e88937244902253e83d91e5e27bd18935bd from '../../assets/98b02e88937244902253e83d91e5e27bd18935bd.png'
-import { Button } from "./ui/button";
-import { ArrowRight } from "lucide-react";
-import { useState } from "react";
-import { AuthModal } from "./auth-modal";
+import { useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router";
+
+import howItWorksImage from "../../assets/how-it-works.png";
 import { useAuth } from "../providers/auth-provider";
+import { Button } from "./ui/button";
+import { AuthModal } from "./auth-modal";
 
 export function HowItWorks() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -14,112 +13,132 @@ export function HowItWorks() {
 
   const handlePrimaryCta = () => {
     if (user) {
-      navigate("/dashboard/websites");
+      navigate("/dashboard/reports");
       return;
     }
     setAuthModalOpen(true);
   };
-  
+
   const steps = [
     {
       number: "1",
       title: "Enter Your Website",
-      description: "Submit your website URL to start the AI-powered analysis."
+      description: "Submit your website URL to start the AI-powered analysis.",
     },
     {
       number: "2",
       title: "AI Analyzes Structure & Discoverability",
-      description: "Our system evaluates SEO signals, structured data, performance, and UX clarity."
+      description: "Our system evaluates SEO signals, structured data, performance, and UX clarity.",
     },
     {
       number: "3",
       title: "Get Your Rankio Score & Action Plan",
-      description: "Receive a detailed breakdown with prioritized recommendations."
-    }
+      description: "Receive a detailed breakdown with prioritized recommendations.",
+    },
   ];
 
   return (
     <>
-      <section id="how-it-works" className="relative overflow-hidden bg-gradient-to-br from-primary via-[#1a1f3a] to-primary py-20 md:py-32">
-        {/* Background grid pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
-        
-        <div className="container mx-auto px-4 md:px-6 relative z-10">
-          {/* Two-column layout */}
-          <div className="grid lg:grid-cols-[45%_55%] gap-12 lg:gap-16 items-stretch max-w-6xl mx-auto mb-12">
-            
-            {/* LEFT SIDE - AI Visual */}
-            <div className="relative group h-full">
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl h-full">
-                {/* Gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-accent/20 via-purple-500/10 to-transparent z-10"></div>
-                
-                {/* Glow effect */}
-                <div className="absolute -inset-1 bg-gradient-to-r from-accent/50 to-purple-500/50 rounded-2xl blur-xl opacity-50 group-hover:opacity-75 transition-opacity"></div>
-                
-                {/* Image */}
-                <img 
-                  src={image_48465712b4d339319e0650703ff691d0ee522582}
-                  alt="AI-powered analysis visualization"
-                  className="relative z-20 w-full h-full object-cover rounded-2xl"
-                />
+      <section
+        id="how-it-works"
+        className="relative overflow-hidden bg-[linear-gradient(180deg,#1b2340_0%,#141b33_100%)] py-16 md:py-24"
+      >
+        <div className="container relative mx-auto max-w-7xl px-4 md:px-6">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
+            <h2 className="text-[30px] font-bold tracking-tight md:text-[42px]" style={{ lineHeight: 1.08 }}>
+              <span className="bg-gradient-to-r from-[#585fc9] to-[#fff] bg-clip-text text-transparent">
+                How It
+              </span>{" "}
+              <span className="text-[#fff]">Works</span>
+            </h2>
+            <p className="mt-4 text-[18px] leading-8 text-white/80">
+              Get actionable insights in three intelligent steps.
+            </p>
+          </div>
+
+          <div className="grid items-center gap-12 lg:grid-cols-[1.16fr_0.84fr] lg:gap-14">
+            <div className="relative flex flex-col items-center">
+              <div className="relative w-full max-w-[740px]">
+                <div className="absolute -inset-4 rounded-[2.5rem] bg-[#6c71e9]/10 blur-3xl" />
+                <div className="relative flex min-h-[430px] items-end">
+                  <img
+                    src={howItWorksImage}
+                    alt="How it works"
+                    className="h-full w-full object-cover object-center"
+                  />
+
+                  {/* <div className="absolute left-[-12px] top-[34%] rounded-xl bg-[#6f74ef] px-4 py-3 text-white shadow-[0_12px_30px_rgba(111,116,239,0.35)]">
+                    <div className="flex items-center gap-2 text-[12px] text-white/90">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      <span>eCommerce Growth</span>
+                    </div>
+                    <div className="mt-1 text-[22px] font-bold">+40%</div>
+                  </div> 
+
+                  <div className="absolute right-[10%] top-[-10px] rounded-xl bg-[#6f74ef] px-4 py-3 text-white shadow-[0_12px_30px_rgba(111,116,239,0.35)]">
+                    <div className="flex items-center gap-2 text-[12px] text-white/90">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Conversion Rate</span>
+                    </div>
+                    <div className="mt-1 text-[22px] font-bold">+30%</div>
+                  </div>
+
+                  <div className="absolute bottom-[12%] right-[7%] rounded-xl bg-[#6f74ef] px-4 py-3 text-white shadow-[0_12px_30px_rgba(111,116,239,0.35)]">
+                    <div className="flex items-center gap-2 text-[12px] text-white/90">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      <span>AI Visibility</span>
+                    </div>
+                    <div className="mt-1 text-[22px] font-bold">+67%</div>
+                  </div> */}
+                </div>
               </div>
+
+              <Button
+                onClick={handlePrimaryCta}
+                size="lg"
+                className="mt-8"
+              >
+                Get Started
+              </Button>
+              <p className="mt-5 text-[16px] text-white/65">
+                Start analyzing your website in seconds — no credit card required
+              </p>
             </div>
 
-            {/* RIGHT SIDE - Vertical Timeline */}
-            <div className="space-y-8">
-              {/* Section Title */}
-              <div className="space-y-3">
-                <h2 className="text-3xl md:text-4xl text-white" style={{ fontWeight: 700 }}>How It Works</h2>
-                <p className="text-lg text-white/70">Get actionable insights in three intelligent steps.</p>
-              </div>
-
-              {/* Steps Timeline */}
-              <div className="relative space-y-8 pt-4">
-                {/* Vertical connecting line */}
-                <div className="absolute left-[15px] top-8 bottom-8 w-[2px] bg-gradient-to-b from-accent/50 via-accent/30 to-transparent"></div>
-
-                {steps.map((step, index) => (
-                  <div key={index} className="relative flex gap-6 group">
-                    {/* Number badge */}
-                    <div className="relative z-10 flex-shrink-0">
-                      <div className="h-8 w-8 bg-accent rounded-full flex items-center justify-center text-white text-sm shadow-lg" style={{ fontWeight: 600 }}>
+            <div className="space-y-7 self-start pt-6">
+              {steps.map((step) => {
+                return (
+                  <article
+                    key={step.number}
+                    className="group relative rounded-[18px] p-[1px] shadow-[0_10px_24px_rgba(0,0,0,0.14)]"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(26,34,61, 0.78) 80%, rgba(26,34,61,0.9) 100%)",
+                    }}
+                  >
+                    <div className="relative min-h-[142px] overflow-hidden rounded-[17px] bg-[#212a49] px-6 py-6">
+                      <div
+                        className="absolute right-5 top-1/2 -translate-y-1/2 text-[74px] font-light leading-none text-transparent"
+                        style={{
+                          WebkitTextStroke: "1px rgba(111,116,239,0.95)",
+                        } as CSSProperties}
+                      >
                         {step.number}
                       </div>
-                      {/* Glow effect on number */}
-                      <div className="absolute inset-0 bg-accent rounded-full blur-md opacity-50 group-hover:opacity-75 transition-opacity"></div>
+                      <div className="relative pr-16">
+                        <h3 className="max-w-[28ch] text-[20px] font-semibold text-white">
+                          {step.title}
+                        </h3>
+                        <p className="mt-4 max-w-[33ch] text-[16px] leading-7 text-white/70">
+                          {step.description}
+                        </p>
+                      </div>
                     </div>
-
-                    {/* Content */}
-                    <div className="flex-1 pb-2">
-                      <h3 className="text-lg md:text-xl text-white mb-2" style={{ fontWeight: 600 }}>
-                        {step.title}
-                      </h3>
-                      <p className="text-sm md:text-base text-white/70 leading-relaxed">
-                        {step.description}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  </article>
+                );
+              })}
             </div>
-
           </div>
-        </div>
-
-        {/* CTA Button Row - Centered */}
-        <div className="relative z-10 flex flex-col items-center gap-3 px-4 md:px-6">
-          <Button 
-            onClick={handlePrimaryCta}
-            className="h-16 bg-accent hover:bg-[#4a4ac0] text-white gap-2 shadow-lg shadow-accent/30 text-lg px-[120px] py-[8px]" 
-            style={{ fontWeight: 600 }}
-          >
-            Get Started
-            <ArrowRight className="h-5 w-5" />
-          </Button>
-          <p className="text-sm text-white/60 text-center">
-            Start analyzing your website in seconds — no credit card required
-          </p>
         </div>
       </section>
 

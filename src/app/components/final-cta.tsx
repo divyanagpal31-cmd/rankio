@@ -1,10 +1,12 @@
 import { ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router";
+import { useRef, useState } from "react";
+
+import { cancelScan, runScan } from "../services/scan-service";
+import { useAuth } from "../providers/auth-provider";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { useState } from "react";
-import { useNavigate } from "react-router";
 import { ScanningModal } from "./scanning-modal";
-import { getScanLimitGate, runScan } from "../services/scan-service";
 
 export function FinalCTA() {
   const [url, setUrl] = useState("");
@@ -13,6 +15,9 @@ export function FinalCTA() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user, session } = useAuth();
+  const scanAbortControllerRef = useRef<AbortController | null>(null);
+  const scanJobIdRef = useRef<string | null>(null);
 
   const validateUrl = (value: string) => {
     if (!value.trim()) {
@@ -20,14 +25,13 @@ export function FinalCTA() {
       return false;
     }
 
-    // Regular expression for URL validation
     const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
-    
+
     if (!urlPattern.test(value)) {
       setError("Please enter a valid website URL");
       return false;
     }
-    
+
     setError("");
     return true;
   };
@@ -46,46 +50,50 @@ export function FinalCTA() {
     if (!validateUrl(url)) return;
     setScanError(null);
 
-    const gate = getScanLimitGate();
-    if (gate) {
-      navigate(gate.upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: gate.limit ?? 3 } });
-      return;
-    }
-
     setIsScanning(true);
+    setScanningModalOpen(true);
+    const scanAbortController = new AbortController();
+    const scanJobId = crypto.randomUUID();
+    scanAbortControllerRef.current = scanAbortController;
+    scanJobIdRef.current = scanJobId;
 
-    let modalOpened = false;
-    const modalTimer = window.setTimeout(() => {
-      modalOpened = true;
-      setScanningModalOpen(true);
-    }, 6000);
-
-    runScan(url).then(({ data, error: scanErr, errorCode, limit, upgradeUrl }) => {
-      window.clearTimeout(modalTimer);
+    runScan(url, {
+      accessToken: session?.access_token,
+      requireAuth: !!user,
+      signal: scanAbortController.signal,
+      scanJobId,
+    }).then(({ data, error: scanErr }) => {
+      scanAbortControllerRef.current = null;
+      scanJobIdRef.current = null;
       setIsScanning(false);
       if (scanErr) {
-        if (errorCode === "SCAN_LIMIT_REACHED") {
-          if (modalOpened) setScanningModalOpen(false);
-          navigate(upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: limit ?? 3 } });
-          return;
-        }
+        if (scanAbortController.signal.aborted) return;
         setScanError(scanErr);
-        if (modalOpened) setScanningModalOpen(false);
+        setScanningModalOpen(false);
         return;
       }
       if (data?.id) {
         try {
           sessionStorage.setItem(`rankio.report.${data.id}`, JSON.stringify(data));
         } catch {
-          // ignore storage failures (quota/private mode)
+          // ignore storage failures
         }
-        if (modalOpened) setScanningModalOpen(false);
+        setScanningModalOpen(false);
         navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from: "/", report: data } });
         return;
       }
-      if (modalOpened) setScanningModalOpen(false);
+      setScanningModalOpen(false);
       navigate("/report");
     });
+  };
+
+  const handleStopScan = () => {
+    void cancelScan(scanJobIdRef.current, { accessToken: session?.access_token });
+    scanAbortControllerRef.current?.abort();
+    scanAbortControllerRef.current = null;
+    scanJobIdRef.current = null;
+    setIsScanning(false);
+    setScanningModalOpen(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -96,23 +104,25 @@ export function FinalCTA() {
 
   return (
     <>
-      <section className="py-20 md:py-28 bg-gradient-to-br from-primary via-primary to-[#1a1f3a]">
-        <div className="container mx-auto px-4 md:px-6">
-          <div className="max-w-3xl mx-auto text-center space-y-8">
-          {/* Headline */}
-          <div className="space-y-4">
-            <h2 className="text-3xl md:text-5xl text-white" style={{ fontWeight: 700, lineHeight: 1.2 }}>
-              Ready to Make Your Website AI-Ready?
+      <section className="relative overflow-hidden bg-[#0e1230] py-20 md:py-28">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(123,123,246,0.18),transparent_35%),linear-gradient(135deg,rgba(7,10,26,0.96),rgba(13,18,48,0.98))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:5rem_5rem] opacity-15" />
+
+        <div className="container relative mx-auto max-w-4xl px-4 md:px-6">
+          <div className="mx-auto text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-white md:text-5xl">
+              <span className="bg-gradient-to-r from-[#585fc9] to-[#fff] bg-clip-text text-transparent">
+                Ready to Make Your Website
+              </span>{" "}
+              <span className="text-[#fff]">AI-Ready?</span>
             </h2>
-            <p className="text-lg md:text-xl text-white/80" style={{ lineHeight: 1.5 }}>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/70 md:text-lg">
               Scan your site in minutes and receive a structured AI-readiness report.
             </p>
-            {scanError && <p className="text-red-300 text-sm mt-2 text-left">{scanError}</p>}
           </div>
 
-          {/* Input form */}
-          <div className="max-w-xl mx-auto">
-            <div className="flex flex-col sm:flex-row gap-3">
+          <div className="mx-auto mt-10 max-w-2xl">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex-1">
                 <Input
                   type="url"
@@ -120,32 +130,34 @@ export function FinalCTA() {
                   value={url}
                   onChange={handleUrlChange}
                   onKeyPress={handleKeyPress}
-                  className={`w-full bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:bg-white/20 focus:border-white/40 text-base px-[20px] py-[28px] ${
+                  className={`w-full border-white/15 bg-white/10 px-5 py-7 text-base text-white placeholder:text-white/45 backdrop-blur-sm focus:border-accent focus:bg-white/15 ${
                     error ? "border-red-400 focus:border-red-400" : ""
                   }`}
                 />
-                {error && (
-                  <p className="text-red-300 text-sm mt-2 text-left">{error}</p>
-                )}
+                {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
               </div>
-              <Button 
+              <Button
                 onClick={handleStartScan}
                 disabled={!url.trim() || !!error || isScanning}
-                className="h-14 px-8 bg-white text-primary hover:bg-white/90 gap-2 disabled:opacity-50 disabled:cursor-not-allowed" 
-                style={{ fontWeight: 600 }}
+                size="lg"
+                className="disabled:cursor-not-allowed"
               >
                 {isScanning ? "Scanning..." : "Start Free Scan"}
                 <ArrowRight className="h-5 w-5" />
               </Button>
             </div>
-            <p className="text-sm text-white/70 mt-4">
-              Free forever • No credit card required • Results in 60 seconds
-            </p>
-          </div>
+            <p className="mt-4 text-sm text-white/65">Free forever - no credit card required - results in about 60 seconds.</p>
+            {scanError && <p className="mt-3 text-sm text-red-300">{scanError}</p>}
           </div>
         </div>
       </section>
-      <ScanningModal open={scanningModalOpen} onOpenChange={setScanningModalOpen} websiteUrl={url} />
+
+      <ScanningModal
+        open={scanningModalOpen}
+        onOpenChange={setScanningModalOpen}
+        websiteUrl={url}
+        onStopScan={handleStopScan}
+      />
     </>
   );
 }

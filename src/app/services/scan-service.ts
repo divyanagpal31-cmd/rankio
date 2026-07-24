@@ -12,66 +12,27 @@ export type ScanResult = {
   generated_at?: string;
   raw_scan_data?: unknown;
   cached?: boolean;
+  credit_used?: boolean;
 };
 
-export type ScanErrorCode = "SCAN_LIMIT_REACHED";
+export type ScanErrorCode = "AUTH_REQUIRED";
 
-type ScanLimitGate = {
-  limit?: number;
-  used?: number;
-  upgradeUrl?: string;
-  expiresAt: number;
+type RunScanOptions = {
+  accessToken?: string | null;
+  requireAuth?: boolean;
+  signal?: AbortSignal;
+  scanJobId?: string;
 };
 
-const scanLimitGateTtlMs = 10 * 60 * 1000;
-
-function scanLimitGateKey(visitorId: string) {
-  return `rankio.scan_limit_gate.${visitorId}`;
-}
-
-export function getScanLimitGate(): Omit<ScanLimitGate, "expiresAt"> | null {
-  if (typeof window === "undefined") return null;
-  const visitorId = getOrCreateVisitorId();
-  try {
-    const raw = localStorage.getItem(scanLimitGateKey(visitorId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as ScanLimitGate;
-    if (!parsed?.expiresAt || Date.now() > parsed.expiresAt) {
-      localStorage.removeItem(scanLimitGateKey(visitorId));
-      return null;
-    }
-    return { limit: parsed.limit, used: parsed.used, upgradeUrl: parsed.upgradeUrl };
-  } catch {
-    return null;
-  }
-}
-
-export function clearScanLimitGate() {
-  if (typeof window === "undefined") return;
-  const visitorId = getOrCreateVisitorId();
-  try {
-    localStorage.removeItem(scanLimitGateKey(visitorId));
-  } catch {
-    // ignore
-  }
-}
-
-function setScanLimitGate(value: { limit?: number; used?: number; upgradeUrl?: string }) {
-  if (typeof window === "undefined") return;
-  const visitorId = getOrCreateVisitorId();
-  try {
-    const payload: ScanLimitGate = { ...value, expiresAt: Date.now() + scanLimitGateTtlMs };
-    localStorage.setItem(scanLimitGateKey(visitorId), JSON.stringify(payload));
-  } catch {
-    // ignore
-  }
-}
+type CancelScanOptions = {
+  accessToken?: string | null;
+};
 
 /**
  * Calls the Supabase Edge Function "scan" which wraps PageSpeed Insights.
- * It returns a cached report if a fresh one (<12h) exists, otherwise runs a new scan.
+ * It returns a cached report if a fresh one (<24h) exists, otherwise runs a new scan.
  */
-export async function runScan(url: string): Promise<{
+export async function runScan(url: string, options: RunScanOptions = {}): Promise<{
   data?: ScanResult;
   error?: string;
   errorCode?: ScanErrorCode | string;
@@ -80,12 +41,28 @@ export async function runScan(url: string): Promise<{
   used?: number;
   upgradeUrl?: string;
 }> {
+  const accessToken = options.accessToken ?? (await supabase.auth.getSession()).data.session?.access_token;
+  if (options.requireAuth && !accessToken) {
+    return {
+      error: "We couldn't verify your login session. Please wait a moment and try scanning again.",
+      errorCode: "AUTH_REQUIRED",
+    };
+  }
   const visitorId = getOrCreateVisitorId();
   const { data, error } = await supabase.functions.invoke("scan", {
-    body: { url, visitor_id: visitorId },
+    body: { url, visitor_id: visitorId, scan_job_id: options.scanJobId },
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    signal: options.signal,
   });
 
   if (error) {
+    if ((error as any)?.name === "AbortError" || options.signal?.aborted) {
+      return {
+        error: "Scan stopped",
+        errorCode: "SCAN_ABORTED",
+      };
+    }
+
     const defaultMsg = error.message ?? "Scan failed";
     const ctx = (error as any)?.context as Response | undefined;
     if (ctx && typeof ctx.text === "function") {
@@ -103,10 +80,7 @@ export async function runScan(url: string): Promise<{
             const used = typeof parsed?.used === "number" ? parsed.used : undefined;
             const upgradeUrl = String(parsed?.upgrade_url ?? "").trim() || undefined;
 
-            const msg = message || (code && code !== "SCAN_LIMIT_REACHED" ? code : "");
-            if (code === "SCAN_LIMIT_REACHED") {
-              setScanLimitGate({ limit, used, upgradeUrl });
-            }
+            const msg = message || code;
             if (code && details) return { error: msg ? `${msg}: ${details}` : details, errorCode: code, status, limit, used, upgradeUrl };
             if (code) return { error: msg || code, errorCode: code, status, limit, used, upgradeUrl };
           } catch {
@@ -120,7 +94,24 @@ export async function runScan(url: string): Promise<{
     }
     return { error: defaultMsg };
   }
-
-  clearScanLimitGate();
+  if (typeof window !== "undefined" && accessToken) {
+    window.dispatchEvent(new Event("rankio:subscription-updated"));
+  }
   return { data: data as ScanResult };
+}
+
+export async function cancelScan(scanJobId: string | null | undefined, options: CancelScanOptions = {}) {
+  if (!scanJobId) return;
+  const accessToken = options.accessToken ?? (await supabase.auth.getSession()).data.session?.access_token;
+  try {
+    await supabase.functions.invoke("cancel-scan", {
+      body: {
+        scan_job_id: scanJobId,
+        visitor_id: getOrCreateVisitorId(),
+      },
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    });
+  } catch {
+    // The UI should still close immediately; the browser abort remains as fallback.
+  }
 }

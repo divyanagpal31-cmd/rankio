@@ -21,43 +21,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const lastUserId = useRef<string | null>(null);
 
   useEffect(() => {
+    const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
     const claimVisitorScans = async () => {
       const visitorId = getVisitorId();
-      if (!visitorId) return;
+      if (!visitorId) return { claimed: 0 };
       try {
-        const { error } = await supabase.functions.invoke("claim-visitor", { body: { visitor_id: visitorId } });
+        const { data, error } = await supabase.rpc("claim_visitor_websites", { visitor_id: visitorId });
         if (!error) {
-          window.dispatchEvent(new Event("rankio:visitor-claimed"));
+          const result = { claimed: Number(data ?? 0) };
+          if (result.claimed > 0) {
+            window.dispatchEvent(new Event("rankio:visitor-claimed"));
+          }
+          return result;
         }
       } catch {
         // ignore claim failures
       }
+
+      return { claimed: 0 };
+    };
+
+    const claimVisitorScansWithRetry = async () => {
+      const delays = [0, 500, 1500, 3000, 6000];
+      for (const delay of delays) {
+        if (delay > 0) await wait(delay);
+        const result = await claimVisitorScans();
+        if (result.claimed > 0) {
+          return;
+        }
+      }
+    };
+
+    const syncAuthState = (nextSession: Session | null) => {
+      const nextUser = nextSession?.user ?? null;
+      const nextUserId = nextUser?.id ?? null;
+      const previousUserId = lastUserId.current;
+
+      setSession(nextSession);
+      setUser((currentUser) => (currentUser?.id === nextUserId ? currentUser : nextUser));
+      setLoading(false);
+      lastUserId.current = nextUserId;
+
+      if (!previousUserId && nextUserId) {
+        void claimVisitorScansWithRetry();
+      }
     };
 
     supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-
-      const nextUserId = data.session?.user?.id ?? null;
-      const prevUserId = lastUserId.current;
-      lastUserId.current = nextUserId;
-      if (!prevUserId && nextUserId) {
-        await claimVisitorScans();
-      }
+      syncAuthState(data.session);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      setLoading(false);
-
-      const nextUserId = nextSession?.user?.id ?? null;
-      const prevUserId = lastUserId.current;
-      lastUserId.current = nextUserId;
-      if (!prevUserId && nextUserId) {
-        claimVisitorScans();
-      }
+      syncAuthState(nextSession);
     });
 
     return () => {
@@ -71,11 +87,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       loading,
       signInWithEmailOtp: async (email, fullName) => {
+        const normalizedEmail = email.trim().toLowerCase();
+        const metadata = fullName ? { full_name: fullName } : undefined;
+        const { error: ensureUserError } = await supabase.functions.invoke("ensure-auth-user", {
+          body: {
+            email: normalizedEmail,
+            data: metadata,
+          },
+        });
+
+        if (ensureUserError) {
+          return { error: ensureUserError.message };
+        }
+
         const { error } = await supabase.auth.signInWithOtp({
-          email,
+          email: normalizedEmail,
           options: {
-            shouldCreateUser: true,
-            data: fullName ? { full_name: fullName } : undefined,
+            shouldCreateUser: false,
+            data: metadata,
             emailRedirectTo: window.location.origin,
           },
         });

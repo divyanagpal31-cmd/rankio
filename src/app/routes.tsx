@@ -4,12 +4,14 @@ import { ReportPage } from "./components/report-page";
 import { DashboardLayout } from "./components/dashboard/dashboard-layout";
 import { Overview } from "./components/dashboard/overview";
 import { MyWebsites } from "./components/dashboard/my-websites";
-import { Reports } from "./components/dashboard/reports";
+import { ReportComparisonPage } from "./components/dashboard/report-comparison-page";
 import { Subscription } from "./components/dashboard/subscription";
 import { ProfileSettings } from "./components/dashboard/profile-settings";
 import { ProtectedRoute } from "./components/protected-route";
 import { TermsOfUse } from "./components/terms-of-use";
 import { PrivacyPolicy } from "./components/privacy-policy";
+import { PayPalSuccess } from "./components/paypal-success";
+import { PayPalCancel } from "./components/paypal-cancel";
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +31,14 @@ export const router = createBrowserRouter([
     element: <ReportPage />,
   },
   {
+    path: "/paypal/success",
+    element: <PayPalSuccess />,
+  },
+  {
+    path: "/paypal/cancel",
+    element: <PayPalCancel />,
+  },
+  {
     path: "/dashboard",
     element: (
       <ProtectedRoute>
@@ -41,12 +51,12 @@ export const router = createBrowserRouter([
         element: <Overview />,
       },
       {
-        path: "websites",
+        path: "reports",
         element: <MyWebsites />,
       },
       {
-        path: "reports",
-        element: <Reports />,
+        path: "reports/compare",
+        element: <ReportComparisonPage />,
       },
       {
         path: "subscription",

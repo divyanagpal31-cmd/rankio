@@ -1,53 +1,73 @@
-import { Brain, Search, Eye } from "lucide-react";
+import { Bot, Lightbulb, LineChart, Search, ShieldCheck, Zap } from "lucide-react";
 
 export function WhyRankioExists() {
-  const pillars = [
+  const features = [
     {
-      icon: Brain,
-      title: "AI Readiness",
-      description: "Evaluate how well your site is structured for AI-driven search."
+      icon: Bot,
+      title: "AI Readiness Score",
+      description: "Instantly understand how optimized your website is for AI search.",
+    },
+    {
+      icon: LineChart,
+      title: "SEO + AEO Analysis",
+      description: "Evaluate both traditional SEO and AI discoverability signals.",
     },
     {
       icon: Search,
-      title: "Search Visibility",
-      description: "Identify technical SEO gaps impacting discoverability."
+      title: "Structured Data Insights",
+      description: "Identify missing schema and machine-readable gaps.",
     },
     {
-      icon: Eye,
-      title: "UX Clarity",
-      description: "Ensure your content is structured for users and algorithms."
-    }
+      icon: Lightbulb,
+      title: "UX Clarity Check",
+      description: "Ensure your content is easily interpreted by AI systems.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Actionable Recommendations",
+      description: "Get clear steps to improve visibility and performance.",
+    },
+    {
+      icon: Zap,
+      title: "Competitive Edge",
+      description: "Stay ahead as AI search reshapes discovery.",
+    },
   ];
 
   return (
-    <section id="why-rankio-exists" className="py-20 md:py-24 bg-white">
-      <div className="container mx-auto px-4 md:px-6 max-w-4xl">
-        <div className="text-center space-y-6 mb-12">
-          <p className="text-xs text-accent tracking-widest" style={{ fontWeight: 600 }}>
-            BUILT FOR THE AI-DRIVEN WEB
-          </p>
-          <h2 className="text-3xl md:text-4xl text-primary" style={{ fontWeight: 700 }}>
-            The AI Search Revolution is Here
+    <section id="why-rankio-exists" className="bg-white py-20 md:py-28">
+      <div className="container mx-auto max-w-7xl px-4 md:px-6">
+        <div className="mx-auto mb-12 max-w-4xl text-center">
+          <h2 className="text-[30px] font-bold tracking-tight md:text-[42px]" style={{ lineHeight: 1.08 }}>
+            <span className="bg-gradient-to-r from-[#585fc9] to-[#23283f] bg-clip-text text-transparent">
+              What Rankio
+            </span>{" "}
+            <span className="text-[#23283f]">Does</span>
           </h2>
-          <p className="text-lg text-muted-foreground max-w-3xl mx-auto" style={{ lineHeight: 1.7 }}>
-            Rankio.ai helps businesses prepare for the future of search and AI discovery. We analyze your website's structure, visibility, and user clarity — so search engines and AI systems can properly understand, rank, and recommend your content.
+          <p className="mx-auto mt-5 max-w-4xl text-[18px] leading-[1.7] text-[#70839a]">
+            Rankio analyzes your website’s AI readiness across SEO, structure, and discoverability. Get a clear
+            score, identify gaps, and understand how visible your site is in AI search.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 mt-16">
-          {pillars.map((pillar, index) => (
-            <div key={index} className="text-center space-y-4 bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 border border-border/50 rounded-xl p-6 hover:shadow-lg hover:border-accent/30 transition-all">
-              <div className="inline-flex items-center justify-center h-14 w-14 rounded-xl bg-accent/10 mx-auto">
-                <pillar.icon className="h-7 w-7 text-accent" />
-              </div>
-              <h3 className="text-lg text-primary" style={{ fontWeight: 600 }}>
-                {pillar.title}
-              </h3>
-              <p className="text-sm text-muted-foreground" style={{ lineHeight: 1.6 }}>
-                {pillar.description}
-              </p>
-            </div>
-          ))}
+        <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+          {features.map((feature, index) => {
+            const Icon = feature.icon;
+            return (
+              <article
+                key={index}
+                className="group min-h-[162px] rounded-[14px] border border-[#6670df] bg-[#fafaff] p-6 shadow-[0_1px_0_rgba(102,112,223,0.08)] transition-all duration-300 hover:-translate-y-1 hover:border-[#4f57c8] hover:bg-white hover:shadow-[0_16px_32px_rgba(88,95,201,0.14)]"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-md text-[#5259c7] transition-transform duration-300 group-hover:scale-110">
+                  <Icon className="h-8 w-8 stroke-[1.5]" />
+                </div>
+                <h3 className="mt-7 text-[18px] font-semibold text-[#1f2633]">{feature.title}</h3>
+                <p className="mt-3 max-w-[18ch] text-[16px] leading-7 text-[#7a8796]">
+                  {feature.description}
+                </p>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, Globe, FileText, CreditCard, Settings, LogOut, Menu, X, Home } from "lucide-react";
+import { LayoutDashboard, FileText, CreditCard, Settings, LogOut, Menu, X, Home } from "lucide-react";
 import darkLogo from "../../../assets/ec37bb065d49c41d8d194954cdc4226b5e7e1837.png";
 import { Button } from "../ui/button";
 import {
@@ -15,8 +15,7 @@ import { useAuth } from "../../providers/auth-provider";
 import { Footer } from "../footer";
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
-  { icon: Globe, label: "My Websites", path: "/dashboard/websites" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: FileText, label: "Reports", path: "/dashboard/reports" },
   { icon: CreditCard, label: "Subscription", path: "/dashboard/subscription" },
   { icon: Settings, label: "Profile Settings", path: "/dashboard/settings" },
@@ -39,9 +38,9 @@ export function DashboardLayout() {
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-white backdrop-blur-md">
         <div className="flex h-16 items-center justify-between px-6">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <img src={darkLogo} alt="Rankio" className="h-8" />
-          </div>
+          </Link>
 
           {/* Mobile menu button */}
           <button
@@ -80,13 +79,17 @@ export function DashboardLayout() {
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/dashboard")}>
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  <span>Dashboard</span>
+                <DropdownMenuItem asChild>
+                  <Link to="/dashboard">
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    <span>Dashboard</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/dashboard/settings")}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Account Settings</span>
+                <DropdownMenuItem asChild>
+                  <Link to="/dashboard/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Profile Settings</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600">

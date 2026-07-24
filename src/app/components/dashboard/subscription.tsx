@@ -1,320 +1,294 @@
+import { Check, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check } from "lucide-react";
-import { useLocation } from "react-router";
+import { Link, useLocation } from "react-router";
+
+import { usePaymentTransactions, useReportUnlockHistory, useSubscription, useSubscriptionHistory } from "../../services/data-hooks";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Textarea } from "../ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useAuth } from "../../providers/auth-provider";
-import { submitPlanLead } from "../../services/lead-service";
+import { supabase } from "../../../lib/supabase";
+import { getVisitorId } from "../../services/visitor-id";
+import { paymentPlans, type PaymentPlanId, type PayPalCheckoutPlanId } from "../../services/payment-plans";
+import { startPayPalCheckout } from "../../services/paypal-service";
+import { formatReadableDate } from "../../services/date-format";
 
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (el: HTMLElement, options: Record<string, unknown>) => string;
-      reset: (widgetId: string) => void;
-    };
-  }
+function getPlanFromSearch(search: string): PaymentPlanId | null {
+  const value = new URLSearchParams(search).get("plan")?.trim() ?? "";
+  return value === "starter" || value === "growth" || value === "pro" ? (value as PaymentPlanId) : null;
 }
 
-type Plan = {
-  id: "free" | "professional" | "agency";
-  name: string;
-  priceLabel: string;
-  description: string;
-  features: string[];
-  cta: string;
-  popular?: boolean;
-};
-
-const plans: Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    priceLabel: "$0 / month",
-    description: "For early-stage founders testing AI readiness",
-    features: ["3 scans (lifetime)", "Basic AI readiness score", "Limited insights preview"],
-    cta: "Current Plan",
-  },
-  {
-    id: "professional",
-    name: "Professional",
-    priceLabel: "$49 / month",
-    description: "For growing businesses optimizing visibility",
-    features: ["Unlimited scans", "Full SEO & AI audit", "Actionable recommendations", "Monthly monitoring", "PDF export"],
-    cta: "Choose Professional",
-    popular: true,
-  },
-  {
-    id: "agency",
-    name: "Agency",
-    priceLabel: "$199 / month",
-    description: "For teams managing multiple clients",
-    features: ["Multi-project dashboard", "White-label reports", "API access", "Priority support"],
-    cta: "Contact Sales",
-  },
-];
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function normalizeWebsite(raw: string): string {
-  let input = raw.trim();
-  if (!input) throw new Error("Website is required");
-  if (!/^https?:\/\//i.test(input)) input = `https://${input}`;
-  const url = new URL(input);
-  if (!/^https?:$/.test(url.protocol)) throw new Error("Invalid protocol");
-  url.hash = "";
-  if (url.pathname === "/") url.pathname = "";
-  return url.toString().replace(/\/$/, "");
-}
-
-function isValidPhone(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) return true; // optional
-  if (!/^[0-9+()\\-\\s.]{7,30}$/.test(trimmed)) return false;
-  const digits = trimmed.replace(/\\D/g, "");
-  return digits.length >= 7 && digits.length <= 15;
+function getReportIdFromSearch(search: string): string | null {
+  return new URLSearchParams(search).get("reportId")?.trim() ?? null;
 }
 
 export function Subscription() {
-  const location = useLocation();
+  const { subscription } = useSubscription();
+  const { subscriptions, loading: historyLoading, error: historyError } = useSubscriptionHistory();
+  const { transactions, loading: transactionsLoading, error: transactionsError } = usePaymentTransactions();
+  const { unlocks, loading: unlocksLoading, error: unlocksError } = useReportUnlockHistory();
   const { user } = useAuth();
+  const location = useLocation();
+  const [activePlanId, setActivePlanId] = useState<PaymentPlanId | null>(null);
+  const [startingPlanId, setStartingPlanId] = useState<PaymentPlanId | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const autoStartRef = useRef<string | null>(null);
+  const backfillRef = useRef<string | null>(null);
 
-  const limitState = (location.state as any) ?? null;
-  const showLimitBanner = limitState?.reason === "scan_limit";
-  const limit = typeof limitState?.limit === "number" ? limitState.limit : 3;
-
-  const defaultName = useMemo(() => {
-    const n = (user?.user_metadata?.full_name as string | undefined) ?? "";
-    return n.trim();
-  }, [user]);
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-
-  const [fullName, setFullName] = useState(defaultName);
-  const [email, setEmail] = useState((user?.email ?? "").trim());
-  const [company, setCompany] = useState("");
-  const [phone, setPhone] = useState("");
-  const [website, setWebsite] = useState("");
-  const [notes, setNotes] = useState("");
-
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
-
-  const [fullNameError, setFullNameError] = useState<string | null>(null);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [websiteError, setWebsiteError] = useState<string | null>(null);
-  const [phoneError, setPhoneError] = useState<string | null>(null);
-
-  const turnstileSiteKey = (import.meta as any).env?.VITE_TURNSTILE_SITE_KEY as string | undefined;
-  const turnstileRef = useRef<HTMLDivElement | null>(null);
-  const turnstileWidgetIdRef = useRef<string | null>(null);
-  const [turnstileToken, setTurnstileToken] = useState<string>("");
-
-  const openPlan = (plan: Plan) => {
-    setSelectedPlan(plan);
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setFullNameError(null);
-    setEmailError(null);
-    setWebsiteError(null);
-    setPhoneError(null);
-    setTurnstileToken("");
-    if (!fullName && defaultName) setFullName(defaultName);
-    if (!email && user?.email) setEmail(String(user.email).trim());
-    setDialogOpen(true);
-  };
+  const navigationState = (location.state as any) ?? null;
+  const requestedPlan = useMemo(() => getPlanFromSearch(location.search), [location.search]);
+  const reportIdFromState = typeof navigationState?.reportId === "string" ? navigationState.reportId.trim() : "";
+  const reportId = useMemo(
+    () => getReportIdFromSearch(location.search) ?? (reportIdFromState || null),
+    [location.search, reportIdFromState]
+  );
 
   useEffect(() => {
-    if (!dialogOpen) return;
-    if (!turnstileSiteKey) return;
-    if (!turnstileRef.current) return;
-    if (!window.turnstile?.render) return;
+    const visitorId = getVisitorId();
+    if (!visitorId || !user?.id) return;
+    const backfillKey = `${user.id}:${visitorId}`;
+    if (backfillRef.current === backfillKey) return;
+    backfillRef.current = backfillKey;
 
-    const existing = turnstileWidgetIdRef.current;
-    if (existing && window.turnstile?.reset) {
-      try {
-        window.turnstile.reset(existing);
-        setTurnstileToken("");
+    const delays = [0, 750, 2000];
+    let cancelled = false;
+
+    const runBackfill = async () => {
+      for (const delay of delays) {
+        if (cancelled) return;
+        if (delay > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, delay));
+        }
+
+        try {
+          const { data, error } = await supabase.rpc("claim_visitor_websites", { visitor_id: visitorId });
+
+          if (cancelled) return;
+          if (!error && Number(data ?? 0) > 0) return;
+        } catch {
+          // ignore backfill failures
+        }
+      }
+    };
+
+    void runBackfill();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const subscriptionPlan = String(subscription?.plan_slug ?? "").trim() as PaymentPlanId | "";
+    if (subscriptionPlan === "starter" || subscriptionPlan === "growth" || subscriptionPlan === "pro") {
+      setActivePlanId(subscriptionPlan);
+      return;
+    }
+    if (!subscription?.plan && subscription?.plan_name) {
+      const matched = paymentPlans.find((plan) => plan.name.toLowerCase() === String(subscription.plan_name).toLowerCase());
+      if (matched) setActivePlanId(matched.id);
+    }
+  }, [subscription]);
+
+  useEffect(() => {
+    if (!requestedPlan) return;
+    if (requestedPlan === "pro") return;
+    if (autoStartRef.current === requestedPlan) return;
+    autoStartRef.current = requestedPlan;
+
+    let cancelled = false;
+
+    async function beginCheckout() {
+      setError(null);
+      setStartingPlanId(requestedPlan);
+      const result = await startPayPalCheckout(requestedPlan as PayPalCheckoutPlanId, { reportId });
+      if (cancelled) return;
+
+      setStartingPlanId(null);
+      if (result.error) {
+        setError(result.error);
         return;
-      } catch {
-        // ignore
+      }
+
+      if (result.approvalUrl) {
+        window.location.assign(result.approvalUrl);
       }
     }
 
-    try {
-      const widgetId = window.turnstile.render(turnstileRef.current, {
-        sitekey: turnstileSiteKey,
-        theme: "light",
-        callback: (token: string) => setTurnstileToken(String(token ?? "")),
-        "error-callback": () => setTurnstileToken(""),
-        "expired-callback": () => setTurnstileToken(""),
-      });
-      turnstileWidgetIdRef.current = widgetId;
-    } catch {
-      // ignore
-    }
-  }, [dialogOpen, turnstileSiteKey]);
+    beginCheckout();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedPlan, reportId]);
 
-  const onSubmit = async () => {
-    if (!selectedPlan) return;
-    setSubmitError(null);
-    setSubmitSuccess(null);
-    setFullNameError(null);
-    setEmailError(null);
-    setWebsiteError(null);
-    setPhoneError(null);
+  const handleCheckout = async (planId: PayPalCheckoutPlanId) => {
+    setError(null);
+    setStartingPlanId(planId);
+    const result = await startPayPalCheckout(planId, { reportId });
+    setStartingPlanId(null);
 
-    const name = fullName.trim();
-    const e = email.trim();
-    const w = website.trim();
-    const p = phone.trim();
-
-    let hasError = false;
-    if (!name) {
-      setFullNameError("Full name is required.");
-      hasError = true;
-    }
-    if (!e) {
-      setEmailError("Email is required.");
-      hasError = true;
-    } else if (!isValidEmail(e)) {
-      setEmailError("Please enter a valid email address.");
-      hasError = true;
-    }
-    if (!w) {
-      setWebsiteError("Website is required.");
-      hasError = true;
-    } else {
-      try {
-        normalizeWebsite(w);
-      } catch {
-        setWebsiteError("Please enter a valid website URL (e.g. https://example.com).");
-        hasError = true;
-      }
-    }
-    if (!isValidPhone(p)) {
-      setPhoneError("Please enter a valid phone number.");
-      hasError = true;
-    }
-    if (turnstileSiteKey && !turnstileToken) {
-      setSubmitError("Please complete the CAPTCHA.");
-      hasError = true;
-    }
-    if (hasError) return;
-
-    setSubmitting(true);
-    let normalizedWebsite = w;
-    try {
-      normalizedWebsite = normalizeWebsite(w);
-    } catch {
-      // validated above
-    }
-    const { error, leadId, emailSent } = await submitPlanLead({
-      plan: selectedPlan.name,
-      full_name: name,
-      email: e,
-      company: company.trim(),
-      phone: p,
-      website: normalizedWebsite,
-      notes: notes.trim(),
-      source: showLimitBanner ? "scan_limit" : "subscription_page",
-      captcha_token: turnstileToken || undefined,
-    });
-    setSubmitting(false);
-
-    if (error) {
-      setSubmitError(error);
+    if (result.error) {
+      setError(result.error);
       return;
     }
 
-    const parts = ["Thanks — we’ll reach out shortly."];
-    if (leadId) parts.push(`Lead ID: ${leadId}.`);
-    if (emailSent === false) parts.push("Email sending is currently disabled/misconfigured.");
-    setSubmitSuccess(parts.join(" "));
+    if (result.approvalUrl) {
+      window.location.assign(result.approvalUrl);
+    }
   };
 
+  const handleContactSales = () => {
+    window.location.href = "mailto:sales@rankio.ai?subject=Rankio%20Pro%20Plan";
+  };
+
+  const formatStatus = (value?: string | null) => {
+    const status = String(value ?? "").trim();
+    return status ? status.charAt(0).toUpperCase() + status.slice(1) : "-";
+  };
+
+  const formatPlan = (value?: string | null) => {
+    const plan = String(value ?? "").trim();
+    return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "-";
+  };
+
+  const formatCurrency = (amount?: number | string | null, currency?: string | null) => {
+    const parsed = typeof amount === "number" ? amount : Number(amount ?? NaN);
+    if (!Number.isFinite(parsed)) return "-";
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: String(currency ?? "USD").trim() || "USD",
+      }).format(parsed);
+    } catch {
+      return `${String(currency ?? "USD").trim() || "USD"} ${parsed.toFixed(2)}`;
+    }
+  };
+
+  const formatUnlockReason = (reason?: string | null, creditUsed?: boolean | null) => {
+    const normalized = String(reason ?? "").trim();
+    if (normalized === "cached_rescan_24h") return "Cached re-scan";
+    if (normalized === "lifetime_access") return "Lifetime access";
+    if (normalized === "credit_consumed") return "Credit consumed";
+    return creditUsed ? "Credit consumed" : "No credit used";
+  };
+
+  const getUnlockWebsite = (unlock: { reports?: { websites?: { url?: string | null; normalized_url?: string | null } | null } | null }) =>
+    unlock.reports?.websites?.url ?? unlock.reports?.websites?.normalized_url ?? "Report";
+
+  const creditsLabel = (plan: { report_quota?: number | null; reports_used?: number | null; lifetime_access?: boolean | null }) => {
+    if (plan.lifetime_access) return "Unlimited";
+    if (typeof plan.report_quota === "number") return `${plan.reports_used ?? 0}/${plan.report_quota} used`;
+    return "Active access";
+  };
+
+  const activePlanName = activePlanId
+    ? paymentPlans.find((plan) => plan.id === activePlanId)?.name
+    : subscription?.plan ?? subscription?.plan_name ?? null;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h1 className="text-3xl text-primary" style={{ fontWeight: 700 }}>
-          Subscription
+          Plan & Billing
         </h1>
-        <p className="text-muted-foreground mt-2">Choose a plan. Payments come next — for now, we’ll contact you.</p>
+        <p className="text-muted-foreground mt-2">
+          Choose a one-time package. Pay with PayPal and unlock the report credits you need.
+        </p>
       </div>
 
-      {showLimitBanner && (
-        <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 text-sm text-primary">
-          You’ve reached the free limit of <span className="font-semibold">{limit}</span> scans. Upgrade to continue
-          scanning.
-        </div>
-      )}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl bg-white p-1 shadow-sm">
+          <TabsTrigger value="overview" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
+          <TabsTrigger value="plans" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Plans</TabsTrigger>
+          <TabsTrigger value="billing" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Billing History</TabsTrigger>
+          <TabsTrigger value="reports" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Credit Usage</TabsTrigger>
+        </TabsList>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        {plans.map((plan) => (
+        <TabsContent value="overview" className="space-y-6">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
+          <div className="text-sm text-muted-foreground">Current plan</div>
+          <div className="mt-1 text-2xl font-semibold text-primary">
+            {activePlanName ?? "No active plan"}
+          </div>
+          <div className="mt-2 text-sm text-muted-foreground">
+            {subscription?.status ? `${formatStatus(subscription.status)} package` : "Choose a plan to unlock full reports."}
+          </div>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
+          <div className="text-sm text-muted-foreground">Available credits</div>
+          <div className="mt-1 text-2xl font-semibold text-primary">
+            {subscription?.lifetime_access
+              ? "Unlimited"
+              : typeof subscription?.report_quota === "number"
+                ? Math.max(subscription.report_quota - (subscription.reports_used ?? 0), 0)
+                : 0}
+          </div>
+          <div className="mt-2 text-sm text-muted-foreground">
+            {subscription ? creditsLabel(subscription) : "0 credits available"}
+          </div>
+        </Card>
+      </div>
+        </TabsContent>
+
+        <TabsContent value="plans" className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-3">
+        {paymentPlans.map((plan) => (
           <Card
             key={plan.id}
-            className={`relative rounded-2xl p-6 border ${
-              plan.popular ? "bg-primary text-white border-accent/30 shadow-xl" : "bg-white border-border/40"
+            className={`relative rounded-[2rem] border px-7 py-8 transition-all duration-300 ${
+              plan.popular
+                ? "scale-[1.02] border-[#6a6af1] bg-[#f8f7ff] shadow-[0_20px_60px_rgba(91,91,214,0.16)]"
+                : "border-[#6c72e8] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
             }`}
           >
             {plan.popular && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="bg-accent text-white text-xs px-4 py-1.5 rounded-full" style={{ fontWeight: 600 }}>
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                <span className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-accent/20">
                   MOST POPULAR
                 </span>
               </div>
             )}
 
-            <div className="mb-4">
-              <h2 className={`text-xl ${plan.popular ? "text-white" : "text-primary"}`} style={{ fontWeight: 700 }}>
-                {plan.name}
-              </h2>
-              <p className={`text-sm mt-1 ${plan.popular ? "text-white/80" : "text-muted-foreground"}`}>
-                {plan.description}
-              </p>
-            </div>
-
-            <div className="mb-4">
-              <div className={`text-3xl ${plan.popular ? "text-white" : "text-primary"}`} style={{ fontWeight: 700 }}>
-                {plan.priceLabel}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-2xl font-semibold text-slate-900">{plan.name}</h3>
+                <p className="mt-3 max-w-[96%] whitespace-nowrap text-[12px] leading-6 text-slate-500 xl:text-[13px]">{plan.description}</p>
               </div>
+
+              <div className="flex items-end gap-1">
+                <span className="text-5xl font-bold text-slate-900">{plan.priceLabel}</span>
+              </div>
+              <span className="pb-1 text-sm text-slate-400">One time payment</span>
+
+              {plan.checkoutEnabled ? (
+                <Button
+                  onClick={() => handleCheckout(plan.id as PayPalCheckoutPlanId)}
+                  disabled={startingPlanId === plan.id}
+                  className="w-full"
+                >
+                  {startingPlanId === plan.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Redirecting...
+                    </>
+                  ) : (
+                    plan.cta
+                  )}
+                </Button>
+              ) : (
+                <Button onClick={handleContactSales} className="w-full">
+                  {plan.cta}
+                </Button>
+              )}
             </div>
 
-            <Button
-              onClick={() => openPlan(plan)}
-              disabled={plan.id === "free"}
-              className={`w-full mb-5 ${
-                plan.id === "free"
-                  ? "opacity-70"
-                  : plan.popular
-                    ? "bg-white text-primary hover:bg-gray-100"
-                    : "bg-accent text-white hover:bg-accent/90"
-              }`}
-            >
-              {plan.cta}
-            </Button>
-
-            <div className="space-y-3">
+            <div className="mt-7 space-y-3">
               {plan.features.map((feature) => (
                 <div key={feature} className="flex items-start gap-3">
-                  <Check className={`h-5 w-5 mt-0.5 ${plan.popular ? "text-accent" : "text-accent"}`} />
-                  <span className={`text-sm ${plan.popular ? "text-white/90" : "text-muted-foreground"}`}>
-                    {feature}
-                  </span>
+                  <Check className="mt-0.5 h-5 w-5 flex-shrink-0 text-accent" />
+                  <span className="text-sm leading-6 text-slate-500">{feature}</span>
                 </div>
               ))}
             </div>
@@ -322,85 +296,216 @@ export function Subscription() {
         ))}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedPlan ? `Enquire about ${selectedPlan.name}` : "Enquire"}</DialogTitle>
-            <DialogDescription>
-              Share a few details and we’ll email you back. Payments and upgrades are coming next.
-            </DialogDescription>
-          </DialogHeader>
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
-          <div className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lead-full-name">Full name</Label>
-                <Input id="lead-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-                {fullNameError && <p className="text-xs text-red-600">{fullNameError}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lead-email">Email</Label>
-                <Input
-                  id="lead-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-                {emailError && <p className="text-xs text-red-600">{emailError}</p>}
-              </div>
-            </div>
+      <div className="rounded-2xl border border-dashed border-border/60 bg-white p-5 text-sm text-muted-foreground">
+        Not ready to buy yet? You can always review the <Link to="/#pricing" className="text-accent underline">public pricing page</Link> or reach out to sales for the Pro plan.
+      </div>
+        </TabsContent>
 
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lead-company">Company</Label>
-                <Input id="lead-company" value={company} onChange={(e) => setCompany(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lead-phone">Phone</Label>
-                <Input id="lead-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                {phoneError && <p className="text-xs text-red-600">{phoneError}</p>}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lead-website">Website</Label>
-              <Input id="lead-website" value={website} onChange={(e) => setWebsite(e.target.value)} required />
-              {websiteError && <p className="text-xs text-red-600">{websiteError}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lead-notes">Notes</Label>
-              <Textarea
-                id="lead-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anything we should know (goals, number of sites, timeline, etc.)"
-              />
-            </div>
-
-            {turnstileSiteKey && (
-              <div className="space-y-2">
-                <Label>CAPTCHA</Label>
-                <div ref={turnstileRef} />
-                <p className="text-xs text-muted-foreground">This helps prevent spam submissions.</p>
-              </div>
-            )}
-
-            {submitError && <p className="text-sm text-red-600">{submitError}</p>}
-            {submitSuccess && <p className="text-sm text-green-700">{submitSuccess}</p>}
+        <TabsContent value="billing" className="space-y-6">
+      <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-primary">Plan History</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Review your current and previous purchased plans.</p>
           </div>
+          {historyError && <p className="text-sm text-red-600">{historyError}</p>}
+        </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>
-              Close
-            </Button>
-            <Button onClick={onSubmit} disabled={submitting || !selectedPlan || selectedPlan.id === "free"}>
-              {submitting ? "Sending..." : "Submit"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-3 pr-4 font-semibold">Plan</th>
+                <th className="py-3 pr-4 font-semibold">Status</th>
+                <th className="py-3 pr-4 font-semibold">Credits</th>
+                <th className="py-3 pr-4 font-semibold">Purchased On</th>
+                <th className="py-3 pr-4 font-semibold">Ended On</th>
+                <th className="py-3 pr-4 font-semibold">Payment ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {historyLoading ? (
+                <tr>
+                  <td colSpan={6} className="py-6 text-muted-foreground">
+                    Loading plan history...
+                  </td>
+                </tr>
+              ) : subscriptions.length > 0 ? (
+                subscriptions.map((plan) => (
+                  <tr key={plan.id} className="border-b border-border/40 last:border-0">
+                    <td className="py-4 pr-4 font-medium text-primary">{plan.plan ?? plan.plan_name ?? "Plan"}</td>
+                    <td className="py-4 pr-4">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          String(plan.status ?? "").toLowerCase() === "active"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {formatStatus(plan.status)}
+                      </span>
+                    </td>
+                    <td className="py-4 pr-4 text-muted-foreground">{creditsLabel(plan)}</td>
+                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(plan.start_date ?? plan.created_at)}</td>
+                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(plan.end_date ?? plan.current_period_end)}</td>
+                    <td className="py-4 pr-4 text-muted-foreground">
+                      {plan.payment_order_id ? (
+                        <span className="font-mono text-xs">{plan.payment_order_id}</span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-6 text-muted-foreground">
+                    No plan purchases yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-primary">Transaction History</h2>
+            <p className="mt-1 text-sm text-muted-foreground">A billing ledger of completed payment provider transactions.</p>
+          </div>
+          {transactionsError && <p className="text-sm text-red-600">{transactionsError}</p>}
+        </div>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[820px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-3 pr-4 font-semibold">Date</th>
+                <th className="py-3 pr-4 font-semibold">Plan</th>
+                <th className="py-3 pr-4 font-semibold">Amount</th>
+                <th className="py-3 pr-4 font-semibold">Status</th>
+                <th className="py-3 pr-4 font-semibold">Provider</th>
+                <th className="py-3 pr-4 font-semibold">Order ID</th>
+                <th className="py-3 pr-4 font-semibold">Capture ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactionsLoading ? (
+                <tr>
+                  <td colSpan={7} className="py-6 text-muted-foreground">
+                    Loading transaction history...
+                  </td>
+                </tr>
+              ) : transactions.length > 0 ? (
+                transactions.map((transaction) => (
+                  <tr key={transaction.id} className="border-b border-border/40 last:border-0">
+                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(transaction.created_at)}</td>
+                    <td className="py-4 pr-4 font-medium text-primary">{transaction.plan_name ?? formatPlan(transaction.plan_slug)}</td>
+                    <td className="py-4 pr-4 text-muted-foreground">{formatCurrency(transaction.amount, transaction.currency)}</td>
+                    <td className="py-4 pr-4">
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                        {formatStatus(transaction.status)}
+                      </span>
+                    </td>
+                    <td className="py-4 pr-4 text-muted-foreground">{formatPlan(transaction.provider)}</td>
+                    <td className="py-4 pr-4 text-muted-foreground">
+                      {transaction.provider_order_id ? <span className="font-mono text-xs">{transaction.provider_order_id}</span> : "-"}
+                    </td>
+                    <td className="py-4 pr-4 text-muted-foreground">
+                      {transaction.provider_capture_id ? <span className="font-mono text-xs">{transaction.provider_capture_id}</span> : "-"}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-6 text-muted-foreground">
+                    No completed payment transactions yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+        </TabsContent>
+
+        <TabsContent value="reports" className="space-y-6">
+      <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-primary">Report Credit Usage</h2>
+            <p className="mt-1 text-sm text-muted-foreground">See which reports used credits and which were included as cached re-scans.</p>
+          </div>
+          {unlocksError && <p className="text-sm text-red-600">{unlocksError}</p>}
+        </div>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[860px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-3 pr-4 font-semibold">Unlocked On</th>
+                <th className="py-3 pr-4 font-semibold">Website</th>
+                <th className="py-3 pr-4 font-semibold">Score</th>
+                <th className="py-3 pr-4 font-semibold">Plan</th>
+                <th className="py-3 pr-4 font-semibold">Credit</th>
+                <th className="py-3 pr-4 font-semibold">Reason</th>
+                <th className="py-3 pr-4 font-semibold">Payment ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unlocksLoading ? (
+                <tr>
+                  <td colSpan={7} className="py-6 text-muted-foreground">
+                    Loading unlocked reports...
+                  </td>
+                </tr>
+              ) : unlocks.length > 0 ? (
+                unlocks.map((unlock) => (
+                  <tr key={unlock.id} className="border-b border-border/40 last:border-0">
+                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(unlock.created_at)}</td>
+                    <td className="py-4 pr-4 font-medium text-primary">
+                      <Link to={`/report?reportId=${encodeURIComponent(String(unlock.report_id ?? ""))}`} className="hover:underline">
+                        {getUnlockWebsite(unlock)}
+                      </Link>
+                    </td>
+                    <td className="py-4 pr-4 text-muted-foreground">{typeof unlock.reports?.ai_score === "number" ? unlock.reports.ai_score : "-"}</td>
+                    <td className="py-4 pr-4 text-muted-foreground">{formatPlan(unlock.plan_slug)}</td>
+                    <td className="py-4 pr-4">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          unlock.credit_used ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {unlock.credit_used ? "Used" : "No"}
+                      </span>
+                    </td>
+                    <td className="py-4 pr-4 text-muted-foreground">{formatUnlockReason(unlock.unlock_reason, unlock.credit_used)}</td>
+                    <td className="py-4 pr-4 text-muted-foreground">
+                      {unlock.payment_transactions?.provider_order_id ? (
+                        <span className="font-mono text-xs">{unlock.payment_transactions.provider_order_id}</span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-6 text-muted-foreground">
+                    No full report unlocks recorded yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -461,7 +461,7 @@ export function ProfileSettings() {
           <Button
             type="submit"
             disabled={saving}
-            className="bg-accent hover:bg-accent/90 text-white gap-2 px-8 disabled:opacity-70"
+            className="gap-2 disabled:opacity-70"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "Saving..." : "Save Changes"}

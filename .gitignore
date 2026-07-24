@@ -27,3 +27,4 @@ coverage/
 
 # Supabase local artifacts
 supabase/.temp/
+supabase/.env.local

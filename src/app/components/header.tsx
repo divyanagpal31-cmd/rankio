@@ -30,19 +30,19 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-white/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 w-full border-b border-white/70 bg-white/90 backdrop-blur-xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
         <div className="container mx-auto px-4 md:px-6">
-          <div className="flex h-16 items-center justify-between">
+          <div className="flex h-16 items-center justify-between gap-4">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
-              <img src={darkLogo} alt="Rankio" className="h-8" />
+              <img src={darkLogo} alt="Rankio" className="h-7 sm:h-8" />
             </Link>
 
             {/* Navigation */}
-            <nav className="hidden md:flex items-center gap-8">
-              <a href="#why-rankio-exists" className="text-sm text-muted-foreground hover:text-primary transition-colors">Overview</a>
+            <nav className="hidden lg:flex items-center gap-7">
+              <a href="#why-rankio-exists" className="text-sm text-muted-foreground hover:text-primary transition-colors">What Rankio Does</a>
               <a href="#features" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                Features
+                Industries
               </a>
               <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 How it Works
@@ -55,6 +55,9 @@ export function Header() {
               </a>
               <a href="#why-rankio" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 Why Rankio
+              </a>
+              <a href="#faq" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                FAQs
               </a>
             </nav>
 
@@ -93,13 +96,17 @@ export function Header() {
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate("/dashboard")}>
-                      <LayoutDashboard className="mr-2 h-4 w-4" />
-                      <span>Dashboard</span>
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard">
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        <span>Dashboard</span>
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/dashboard/settings")}>
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span>Account Settings</span>
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Profile Settings</span>
+                      </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="text-red-600">
@@ -110,20 +117,19 @@ export function Header() {
                 </DropdownMenu>
               ) : (
                 <>
-                  <Button
-                    variant="outline"
-                    className="text-primary hidden sm:flex border-primary/20 hover:bg-accent hover:text-white hover:border-accent"
-                    onClick={() => setAuthModalOpen(true)}
-                  >
-                    Sign In
-                  </Button>
-                  <Button
-                    className="bg-accent hover:bg-accent/90 text-white"
-                    onClick={() => setAuthModalOpen(true)}
-                  >
-                    Get Started
-                  </Button>
-                </>
+                <Button
+                  variant="outline"
+                  className="hidden sm:flex"
+                  onClick={() => setAuthModalOpen(true)}
+                >
+                  Sign In
+                </Button>
+                <Button
+                  onClick={() => setAuthModalOpen(true)}
+                >
+                  Get Started
+                </Button>
+              </>
               )}
             </div>
           </div>

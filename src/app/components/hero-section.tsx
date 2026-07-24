@@ -2,10 +2,11 @@ import { ArrowRight, Sparkles, Zap, MessageCircle, Database, TrendingUp, Grid3x3
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ScanningModal } from "./scanning-modal";
-import { getScanLimitGate, runScan } from "../services/scan-service";
+import { cancelScan, runScan } from "../services/scan-service";
 import { useNavigate } from "react-router";
+import { useAuth } from "../providers/auth-provider";
 
 export function HeroSection() {
   const [scanningModalOpen, setScanningModalOpen] = useState(false);
@@ -14,6 +15,9 @@ export function HeroSection() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user, session } = useAuth();
+  const scanAbortControllerRef = useRef<AbortController | null>(null);
+  const scanJobIdRef = useRef<string | null>(null);
 
   const validateUrl = (value: string) => {
     if (!value.trim()) {
@@ -47,32 +51,27 @@ export function HeroSection() {
     if (!validateUrl(websiteUrl)) return;
     setScanError(null);
 
-    const gate = getScanLimitGate();
-    if (gate) {
-      navigate(gate.upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: gate.limit ?? 3 } });
-      return;
-    }
-
     setIsScanning(true);
+    setScanningModalOpen(true);
+    const scanAbortController = new AbortController();
+    const scanJobId = crypto.randomUUID();
+    scanAbortControllerRef.current = scanAbortController;
+    scanJobIdRef.current = scanJobId;
 
-    let modalOpened = false;
-    const modalTimer = window.setTimeout(() => {
-      modalOpened = true;
-      setScanningModalOpen(true);
-    }, 6000);
-
-    const { data, error, errorCode, limit, upgradeUrl } = await runScan(websiteUrl);
-    window.clearTimeout(modalTimer);
+    const { data, error } = await runScan(websiteUrl, {
+      accessToken: session?.access_token,
+      requireAuth: !!user,
+      signal: scanAbortController.signal,
+      scanJobId,
+    });
+    scanAbortControllerRef.current = null;
+    scanJobIdRef.current = null;
     setIsScanning(false);
 
     if (error) {
-      if (errorCode === "SCAN_LIMIT_REACHED") {
-        if (modalOpened) setScanningModalOpen(false);
-        navigate(upgradeUrl || "/dashboard/subscription", { state: { reason: "scan_limit", limit: limit ?? 3 } });
-        return;
-      }
+      if (scanAbortController.signal.aborted) return;
       setScanError(error);
-      if (modalOpened) setScanningModalOpen(false);
+      setScanningModalOpen(false);
       return;
     }
 
@@ -82,13 +81,22 @@ export function HeroSection() {
       } catch {
         // ignore storage failures (quota/private mode)
       }
-      if (modalOpened) setScanningModalOpen(false);
+      setScanningModalOpen(false);
       navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from: "/", report: data } });
       return;
     }
 
-    if (modalOpened) setScanningModalOpen(false);
+    setScanningModalOpen(false);
     navigate("/report");
+  };
+
+  const handleStopScan = () => {
+    void cancelScan(scanJobIdRef.current, { accessToken: session?.access_token });
+    scanAbortControllerRef.current?.abort();
+    scanAbortControllerRef.current = null;
+    scanJobIdRef.current = null;
+    setIsScanning(false);
+    setScanningModalOpen(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -153,7 +161,7 @@ export function HeroSection() {
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="space-y-6"
               >
-                <h1 className="tracking-tight bg-gradient-to-r from-white via-blue-200 to-purple-400 bg-clip-text text-transparent text-[48px]" style={{ fontWeight: 700, lineHeight: 1.1 }}>Is Your Website AI-Ready for the Future of Search?</h1>
+                <h1 className="tracking-tight bg-gradient-to-r from-white via-accent/30 to-purple-400 bg-clip-text text-transparent text-[48px]" style={{ fontWeight: 700, lineHeight: 1.1 }}>Is Your Website AI-Ready for the Future of Search?</h1>
                 <p className="text-white/80 max-w-xl text-[20px]" style={{ lineHeight: 1.5 }}>
                   Rankio.ai analyzes your website's structure, SEO signals, and user clarity — helping you stay visible across search engines and AI assistants.
                 </p>
@@ -179,7 +187,8 @@ export function HeroSection() {
                       onKeyPress={handleKeyPress}
                     />
                     <Button 
-                      className="h-14 px-8 bg-accent hover:bg-[#4a4ac0] text-white gap-2 shadow-lg shadow-accent/30 text-base disabled:opacity-50 disabled:cursor-not-allowed" 
+                      size="lg"
+                      className="gap-2 disabled:cursor-not-allowed"
                       style={{ fontWeight: 600 }}
                       onClick={handleScanWebsite}
                       disabled={!websiteUrl.trim() || !!urlError || isScanning}
@@ -252,7 +261,7 @@ export function HeroSection() {
                           <defs>
                             <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                               <stop offset="0%" stopColor="#5B5BD6" />
-                              <stop offset="100%" stopColor="#7B7BF6" />
+                              <stop offset="100%" stopColor="hsl(var(--accent))" />
                             </linearGradient>
                           </defs>
                         </svg>
@@ -378,7 +387,7 @@ export function HeroSection() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.6, delay: 0.8 }}
-                  className="absolute top-1/3 -left-4 lg:-left-16 bg-white/80 backdrop-blur-xl border border-blue-200/50 rounded-xl p-3 shadow-lg z-20"
+                  className="absolute top-1/3 -left-4 lg:-left-16 bg-white/80 backdrop-blur-xl border border-accent/20 rounded-xl p-3 shadow-lg z-20"
                   style={{
                     boxShadow: "0 8px 32px rgba(91, 91, 214, 0.15)"
                   }}
@@ -388,12 +397,12 @@ export function HeroSection() {
                     transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                     className="flex items-center gap-2"
                   >
-                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center">
                       <Database className="h-4 w-4 text-white" />
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground font-medium">Schema</div>
-                      <div className="text-sm font-semibold text-blue-600">Valid</div>
+                      <div className="text-sm font-semibold text-accent">Valid</div>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -478,7 +487,12 @@ export function HeroSection() {
         </div>
       </section>
 
-      <ScanningModal open={scanningModalOpen} onOpenChange={setScanningModalOpen} websiteUrl={websiteUrl} />
+      <ScanningModal
+        open={scanningModalOpen}
+        onOpenChange={setScanningModalOpen}
+        websiteUrl={websiteUrl}
+        onStopScan={handleStopScan}
+      />
     </>
   );
 }

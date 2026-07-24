@@ -3,3 +3,14 @@
 # The function uses the service role key internally to write to `leads`.
 verify_jwt = false
 
+[functions.ensure-auth-user]
+# Allows first-time email OTP users to be created as already confirmed before the OTP email is sent.
+verify_jwt = false
+
+[functions.paypal-checkout]
+# Checkout is only available to authenticated users because the purchase is tied to their account.
+verify_jwt = true
+
+[functions.cancel-scan]
+# Supports both authenticated and guest scan cancellation.
+verify_jwt = false

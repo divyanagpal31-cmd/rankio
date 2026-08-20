@@ -3,17 +3,20 @@ import { useNavigate } from "react-router";
 import { useRef, useState } from "react";
 
 import { cancelScan, runScan } from "../services/scan-service";
+import { normalizeWebsiteInput } from "../services/website-input";
 import { useAuth } from "../providers/auth-provider";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ScanningModal } from "./scanning-modal";
 
 export function FinalCTA() {
+  const SCAN_COMPLETE_DELAY_MS = 4700;
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   const [scanningModalOpen, setScanningModalOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanComplete, setScanComplete] = useState(false);
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const scanAbortControllerRef = useRef<AbortController | null>(null);
@@ -25,10 +28,10 @@ export function FinalCTA() {
       return false;
     }
 
-    const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
-
-    if (!urlPattern.test(value)) {
-      setError("Please enter a valid website URL");
+    try {
+      normalizeWebsiteInput(value);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Please enter a valid website URL");
       return false;
     }
 
@@ -51,18 +54,20 @@ export function FinalCTA() {
     setScanError(null);
 
     setIsScanning(true);
+    setScanComplete(false);
     setScanningModalOpen(true);
+    const normalizedUrl = normalizeWebsiteInput(url);
     const scanAbortController = new AbortController();
     const scanJobId = crypto.randomUUID();
     scanAbortControllerRef.current = scanAbortController;
     scanJobIdRef.current = scanJobId;
 
-    runScan(url, {
+    runScan(normalizedUrl, {
       accessToken: session?.access_token,
       requireAuth: !!user,
       signal: scanAbortController.signal,
       scanJobId,
-    }).then(({ data, error: scanErr }) => {
+    }).then(async ({ data, error: scanErr }) => {
       scanAbortControllerRef.current = null;
       scanJobIdRef.current = null;
       setIsScanning(false);
@@ -78,11 +83,15 @@ export function FinalCTA() {
         } catch {
           // ignore storage failures
         }
+        setScanComplete(true);
+        await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
         setScanningModalOpen(false);
+        setScanComplete(false);
         navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from: "/", report: data } });
         return;
       }
       setScanningModalOpen(false);
+      setScanComplete(false);
       navigate("/report");
     });
   };
@@ -93,6 +102,7 @@ export function FinalCTA() {
     scanAbortControllerRef.current = null;
     scanJobIdRef.current = null;
     setIsScanning(false);
+    setScanComplete(false);
     setScanningModalOpen(false);
   };
 
@@ -110,14 +120,15 @@ export function FinalCTA() {
 
         <div className="container relative mx-auto max-w-4xl px-4 md:px-6">
           <div className="mx-auto text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-white md:text-5xl">
+            <h2 className="text-[28px] font-bold tracking-tight text-white sm:text-3xl md:text-5xl">
               <span className="bg-gradient-to-r from-[#585fc9] to-[#fff] bg-clip-text text-transparent">
-                Ready to Make Your Website
+                Ready to See What 
+                <br />
               </span>{" "}
-              <span className="text-[#fff]">AI-Ready?</span>
+              <span className="text-[#fff]">AI Sees</span>
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/70 md:text-lg">
-              Scan your site in minutes and receive a structured AI-readiness report.
+              Analyze your website in minutes and receive a personalized AI Visibility Report with prioritized recommendations to improve how AI understands your business.
             </p>
           </div>
 
@@ -126,11 +137,11 @@ export function FinalCTA() {
               <div className="flex-1">
                 <Input
                   type="url"
-                  placeholder="https://yourwebsite.com"
+                  placeholder="Enter your website URL"
                   value={url}
                   onChange={handleUrlChange}
                   onKeyPress={handleKeyPress}
-                  className={`w-full border-white/15 bg-white/10 px-5 py-7 text-base text-white placeholder:text-white/45 backdrop-blur-sm focus:border-accent focus:bg-white/15 ${
+                  className={`h-12 w-full border-white/15 bg-white/10 px-4 py-3 text-base text-white placeholder:text-white/45 backdrop-blur-sm focus:border-accent focus:bg-white/15 ${
                     error ? "border-red-400 focus:border-red-400" : ""
                   }`}
                 />
@@ -140,13 +151,13 @@ export function FinalCTA() {
                 onClick={handleStartScan}
                 disabled={!url.trim() || !!error || isScanning}
                 size="lg"
-                className="disabled:cursor-not-allowed"
+                className="w-full disabled:cursor-not-allowed sm:w-auto"
               >
-                {isScanning ? "Scanning..." : "Start Free Scan"}
+                {isScanning ? "Scanning..." : "Generate My AI Report"}
                 <ArrowRight className="h-5 w-5" />
               </Button>
             </div>
-            <p className="mt-4 text-sm text-white/65">Free forever - no credit card required - results in about 60 seconds.</p>
+            <p className="mt-4 text-sm text-white/65">Free summary available • No credit card required • Full report available instantly after purchase</p>
             {scanError && <p className="mt-3 text-sm text-red-300">{scanError}</p>}
           </div>
         </div>
@@ -156,6 +167,7 @@ export function FinalCTA() {
         open={scanningModalOpen}
         onOpenChange={setScanningModalOpen}
         websiteUrl={url}
+        isComplete={scanComplete}
         onStopScan={handleStopScan}
       />
     </>

@@ -10,6 +10,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "..
 import { useWebsites } from "../../services/data-hooks";
 import { useAuth } from "../../providers/auth-provider";
 import { cancelScan, runScan } from "../../services/scan-service";
+import { normalizeWebsiteInput } from "../../services/website-input";
 import { supabase } from "../../../lib/supabase";
 import { ScanningModal } from "../scanning-modal";
 import {
@@ -23,19 +24,6 @@ import {
 import { useLocation, useNavigate } from "react-router";
 import { buildReportComparison, type ReportComparisonInput } from "../../services/report-comparison-service";
 import { formatReadableDate } from "../../services/date-format";
-
-function normalizeUrl(raw: string): string {
-  let u = raw.trim();
-  if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
-  const url = new URL(u);
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Invalid protocol");
-  if (!url.hostname.includes(".") || url.hostname.startsWith(".") || url.hostname.endsWith(".")) {
-    throw new Error("Invalid hostname");
-  }
-  url.hash = "";
-  if (url.pathname === "/") url.pathname = "";
-  return url.toString().replace(/\/$/, "");
-}
 
 function normalizeStatus(value?: string | null) {
   return (value ?? "").toLowerCase().trim().replace(/[\s_]+/g, "-");
@@ -74,6 +62,7 @@ function reportPlanBadge(website: any) {
 }
 
 export function MyWebsites() {
+  const SCAN_COMPLETE_DELAY_MS = 4700;
   const { websites, loading, error, refetch } = useWebsites();
   const { user, session } = useAuth();
   const navigate = useNavigate();
@@ -87,6 +76,7 @@ export function MyWebsites() {
   const [adding, setAdding] = useState(false);
   const [scanningModalOpen, setScanningModalOpen] = useState(false);
   const [scanTargetUrl, setScanTargetUrl] = useState("");
+  const [scanComplete, setScanComplete] = useState(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const scanJobIdRef = useRef<string | null>(null);
   const [query, setQuery] = useState("");
@@ -141,6 +131,7 @@ export function MyWebsites() {
     }
 
     setScanTargetUrl(url);
+    setScanComplete(false);
     setScanningModalOpen(true);
     const scanAbortController = new AbortController();
     const scanJobId = crypto.randomUUID();
@@ -163,7 +154,10 @@ export function MyWebsites() {
     } else {
       refetch();
       const from = `${location.pathname}${location.search}`;
+      setScanComplete(true);
+      await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
       setScanningModalOpen(false);
+      setScanComplete(false);
       navigate(data?.id ? `/report?reportId=${encodeURIComponent(data.id)}` : "/report", {
         state: { from, report: data },
       });
@@ -175,10 +169,10 @@ export function MyWebsites() {
   const validateNewWebsiteUrl = (value: string) => {
     if (!value.trim()) return "Website URL is required";
     try {
-      normalizeUrl(value);
+      normalizeWebsiteInput(value);
       return "";
-    } catch {
-      return "Please enter a valid website URL";
+    } catch (error) {
+      return error instanceof Error ? error.message : "Please enter a valid website URL";
     }
   };
 
@@ -194,8 +188,9 @@ export function MyWebsites() {
     setAdding(true);
     setNewWebsiteError(null);
     setActionError(null);
+    setScanComplete(false);
 
-    const normalized = normalizeUrl(newWebsiteUrl);
+    const normalized = normalizeWebsiteInput(newWebsiteUrl);
 
     setAddOpen(false);
     setNewWebsiteUrl("");
@@ -226,7 +221,10 @@ export function MyWebsites() {
 
     refetch();
     const from = `${location.pathname}${location.search}`;
+    setScanComplete(true);
+    await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
     setScanningModalOpen(false);
+    setScanComplete(false);
     navigate(data?.id ? `/report?reportId=${encodeURIComponent(data.id)}` : "/report", {
       state: { from, report: data },
     });
@@ -239,6 +237,7 @@ export function MyWebsites() {
     scanJobIdRef.current = null;
     setAdding(false);
     setIsScanning(null);
+    setScanComplete(false);
     setScanningModalOpen(false);
   };
 
@@ -771,7 +770,7 @@ export function MyWebsites() {
         <Card className="border-dashed border-2 border-border/60">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Globe className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-primary mb-2">No reports yet</h3>
+            <h3 className="text-lg font-semibold text-primary mb-2">No Reports Yet</h3>
             <p className="text-sm text-muted-foreground mb-6">
               Add your first website to start monitoring its AI readiness
             </p>
@@ -791,7 +790,7 @@ export function MyWebsites() {
         <Card className="border-dashed border-2 border-border/60">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Globe className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-primary mb-2">No reports match your filters</h3>
+            <h3 className="text-lg font-semibold text-primary mb-2">No Reports Match Your Filters</h3>
             <p className="text-sm text-muted-foreground mb-6 text-center max-w-md">
               Try clearing the search or status filters to see all of your report entries.
             </p>
@@ -830,7 +829,7 @@ export function MyWebsites() {
             <Label htmlFor="websiteUrl">Website URL</Label>
             <Input
               id="websiteUrl"
-              placeholder="example.com"
+              placeholder="Enter your website URL"
               value={newWebsiteUrl}
               onChange={(e) => {
                 setNewWebsiteUrl(e.target.value);
@@ -1212,6 +1211,7 @@ export function MyWebsites() {
         open={scanningModalOpen}
         onOpenChange={setScanningModalOpen}
         websiteUrl={scanTargetUrl}
+        isComplete={scanComplete}
         onStopScan={handleStopScan}
       />
     </div>

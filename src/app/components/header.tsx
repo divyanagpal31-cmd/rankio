@@ -30,29 +30,29 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-white/70 bg-white/90 backdrop-blur-xl shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-        <div className="container mx-auto px-4 md:px-6">
-          <div className="flex h-16 items-center justify-between gap-4">
+      <header className="sticky top-0 z-50 w-full border-b border-white/70 bg-white/90 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+        <div className="container mx-auto max-w-7xl px-4 md:px-6">
+          <div className="flex h-16 items-center justify-between gap-3 sm:h-20 sm:gap-4">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
-              <img src={darkLogo} alt="Rankio" className="h-7 sm:h-8" />
+              <img src={darkLogo} alt="Rankio" className="h-10 w-auto sm:h-12" />
             </Link>
 
             {/* Navigation */}
             <nav className="hidden lg:flex items-center gap-7">
-              <a href="#why-rankio-exists" className="text-sm text-muted-foreground hover:text-primary transition-colors">What Rankio Does</a>
+              <a href="#why-rankio-exists" className="text-sm text-muted-foreground hover:text-primary transition-colors">Platform</a>
               <a href="#features" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                Industries
+                Solutions
               </a>
               <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 How it Works
               </a>
-              <a href="#pricing" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                Pricing
-              </a>
               <a href="#sample-report" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 Sample Report
               </a>
+              <a href="#pricing" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                Pricing
+              </a>              
               <a href="#why-rankio" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 Why Rankio
               </a>
@@ -68,7 +68,7 @@ export function Header() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="flex items-center gap-3 hover:bg-gray-50 rounded-lg px-3 py-2 h-auto"
+                      className="flex h-auto items-center gap-3 rounded-lg border-0 px-3 py-2 shadow-none hover:bg-gray-50"
                     >
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="bg-accent text-white text-sm">

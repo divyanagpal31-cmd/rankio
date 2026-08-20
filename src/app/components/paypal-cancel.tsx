@@ -5,7 +5,7 @@ export function PayPalCancel() {
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-12">
       <div className="w-full rounded-3xl border border-border/60 bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-bold text-primary">Checkout cancelled</h1>
+        <h1 className="text-3xl font-bold text-primary">Checkout Cancelled</h1>
         <p className="mt-4 text-muted-foreground">
           No worries — your PayPal payment was not completed. You can try again whenever you’re ready.
         </p>
@@ -22,4 +22,3 @@ export function PayPalCancel() {
     </div>
   );
 }
-

@@ -36,11 +36,23 @@ import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Footer } from "./footer";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useAuth } from "../providers/auth-provider";
 import { useReports, useSubscription } from "../services/data-hooks";
 import { cancelScan, runScan } from "../services/scan-service";
 import { ScanningModal } from "./scanning-modal";
+import { isScanStateStale } from "../services/scan-staleness";
 
 type ReportRow = {
   parameter: string;
@@ -340,6 +352,26 @@ function maturityLabel(score: number) {
   if (score >= 71) return "Optimized";
   if (score >= 56) return "Developing";
   return "Beginner";
+}
+
+function maturityDescription(score: number) {
+  if (score >= 86) return "Your website is well-prepared for AI visibility and answer engines.";
+  if (score >= 71) return "Your website is in a strong position, with a few improvements left to make.";
+  if (score >= 56) return "Your website is making progress, but still needs important improvements.";
+  return "Your website is at an early stage and needs foundational AI-readiness improvements.";
+}
+
+function maturityShortDescription(label: string) {
+  switch (label) {
+    case "AI-Leading":
+      return "Strong AI visibility";
+    case "Optimized":
+      return "Nearly ready";
+    case "Developing":
+      return "Improving steadily";
+    default:
+      return "Needs core fixes";
+  }
 }
 
 function maturityPosition(score: number) {
@@ -1075,17 +1107,44 @@ function RoadmapCard({
 }
 
 export function ReportPage() {
+  const SCAN_COMPLETE_DELAY_MS = 4700;
   const { reports, loading: reportsLoading } = useReports();
   const { subscription, loading: subscriptionLoading } = useSubscription();
   const { user, session, signOut } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [leavePreviewOpen, setLeavePreviewOpen] = useState(false);
   const [rescanning, setRescanning] = useState(false);
   const [rescanMessage, setRescanMessage] = useState<string | null>(null);
   const [scanningModalOpen, setScanningModalOpen] = useState(false);
   const [scanTargetUrl, setScanTargetUrl] = useState("");
+  const [scanComplete, setScanComplete] = useState(false);
+  const [stalePromptOpen, setStalePromptOpen] = useState(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const scanJobIdRef = useRef<string | null>(null);
+  const pendingLeaveActionRef = useRef<(() => void) | null>(null);
+  const lastActiveAtRef = useRef(Date.now());
+
+  useEffect(() => {
+    const markActive = () => {
+      lastActiveAtRef.current = Date.now();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markActive();
+      }
+    };
+
+    markActive();
+    window.addEventListener("focus", markActive);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", markActive);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   const scrollToReportSection = useCallback((sectionId: string, updateHash = true) => {
     const section = document.getElementById(sectionId);
@@ -1166,7 +1225,7 @@ export function ReportPage() {
         if (resolvedReport) {
           writeReportCache(reportId, resolvedReport);
         } else if (user) {
-          setReportError("You do not have access to this report.");
+          setReportError("This report belongs to another account or is no longer available.");
         }
       }
 
@@ -1334,6 +1393,41 @@ export function ReportPage() {
     navigate("/");
   };
 
+  const requestLeaveLockedPreview = (action: () => void) => {
+    if (!isGuest) {
+      action();
+      return;
+    }
+
+    pendingLeaveActionRef.current = action;
+    setLeavePreviewOpen(true);
+  };
+
+  const handleLeaveAnyway = () => {
+    const action = pendingLeaveActionRef.current;
+    pendingLeaveActionRef.current = null;
+    setLeavePreviewOpen(false);
+    action?.();
+  };
+
+  const handleUnlockNow = () => {
+    pendingLeaveActionRef.current = null;
+    setLeavePreviewOpen(false);
+
+    if (user) {
+      navigate("/dashboard/subscription?tab=plans", {
+        state: {
+          from: `${location.pathname}${location.search}`,
+          reason: "report_unlock",
+          reportId: String(activeReport?.id ?? ""),
+        },
+      });
+      return;
+    }
+
+    setAuthOpen(true);
+  };
+
   const headerRight = user ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -1355,20 +1449,28 @@ export function ReportPage() {
           <p className="text-xs text-muted-foreground">{user.email}</p>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/dashboard">
+        <DropdownMenuItem onSelect={(event) => event.preventDefault()} asChild>
+          <button
+            type="button"
+            onClick={() => requestLeaveLockedPreview(() => navigate("/dashboard"))}
+            className="flex w-full items-center gap-2"
+          >
             <LayoutDashboard className="mr-2 h-4 w-4" />
             <span>Dashboard</span>
-          </Link>
+          </button>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/dashboard/settings">
+        <DropdownMenuItem onSelect={(event) => event.preventDefault()} asChild>
+          <button
+            type="button"
+            onClick={() => requestLeaveLockedPreview(() => navigate("/dashboard/settings"))}
+            className="flex w-full items-center gap-2"
+          >
             <Settings className="mr-2 h-4 w-4" />
             <span>Profile Settings</span>
-          </Link>
+          </button>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+        <DropdownMenuItem onClick={() => requestLeaveLockedPreview(handleLogout)} className="text-red-600">
           <LogOut className="mr-2 h-4 w-4" />
           <span>Logout</span>
         </DropdownMenuItem>
@@ -1954,11 +2056,11 @@ export function ReportPage() {
       <>
         <div className="min-h-screen bg-[#0b1022] text-white">
           <header className="sticky top-0 z-50 border-b border-border/40 bg-white backdrop-blur-md">
-            <div className="container mx-auto px-4 md:px-6">
-              <div className="flex h-16 items-center justify-between">
-                <Link to="/" className="flex items-center gap-2">
-                  <img src={darkLogo} alt="Rankio" className="h-8" />
-                </Link>
+            <div className="container mx-auto max-w-7xl px-4 md:px-6">
+              <div className="flex h-20 items-center justify-between">
+                <button type="button" onClick={() => requestLeaveLockedPreview(() => navigate("/"))} className="flex items-center gap-2">
+                  <img src={darkLogo} alt="Rankio" className="h-10 w-auto sm:h-12" />
+                </button>
                 {headerRight}
               </div>
             </div>
@@ -1991,10 +2093,10 @@ export function ReportPage() {
       <>
         <div className="min-h-screen bg-[#0b1022] text-white">
           <header className="sticky top-0 z-50 border-b border-border/40 bg-white backdrop-blur-md">
-            <div className="container mx-auto px-4 md:px-6">
-              <div className="flex h-16 items-center justify-between">
+            <div className="container mx-auto max-w-7xl px-4 md:px-6">
+              <div className="flex h-20 items-center justify-between">
                 <Link to="/" className="flex items-center gap-2">
-                  <img src={darkLogo} alt="Rankio" className="h-8" />
+                  <img src={darkLogo} alt="Rankio" className="h-10 w-auto sm:h-12" />
                 </Link>
                 {headerRight}
               </div>
@@ -2014,10 +2116,10 @@ export function ReportPage() {
       <>
         <div className="min-h-screen bg-[#0b1022] text-white">
           <header className="sticky top-0 z-50 border-b border-border/40 bg-white backdrop-blur-md">
-            <div className="container mx-auto px-4 md:px-6">
-              <div className="flex h-16 items-center justify-between">
+            <div className="container mx-auto max-w-7xl px-4 md:px-6">
+              <div className="flex h-20 items-center justify-between">
                 <Link to="/" className="flex items-center gap-2">
-                  <img src={darkLogo} alt="Rankio" className="h-8" />
+                  <img src={darkLogo} alt="Rankio" className="h-10 w-auto sm:h-12" />
                 </Link>
                 {headerRight}
               </div>
@@ -2113,7 +2215,7 @@ export function ReportPage() {
     setRescanMessage("Implementation strategy booking is not connected yet. We can wire this to your preferred booking or contact flow next.");
   };
 
-  const handleRescan = async () => {
+  const startRescan = async () => {
     if (!user || !activeReport || rescanning) return;
     setRescanMessage(null);
 
@@ -2173,6 +2275,7 @@ export function ReportPage() {
 
     const normalizedScanUrl = String(scanUrl);
     setScanTargetUrl(normalizedScanUrl);
+    setScanComplete(false);
     setScanningModalOpen(true);
     setRescanning(true);
     const scanAbortController = new AbortController();
@@ -2199,8 +2302,23 @@ export function ReportPage() {
     if (data?.id) {
       writeReportCache(data.id, data);
       const from = `${location.pathname}${location.search}`;
+      setScanComplete(true);
+      await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
       navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from, report: data } });
     }
+  };
+
+  const handleRescan = async () => {
+    if (isScanStateStale(lastActiveAtRef.current)) {
+      setStalePromptOpen(true);
+      return;
+    }
+
+    await startRescan();
+  };
+
+  const handleRefreshRescan = () => {
+    window.location.reload();
   };
 
   const handleStopScan = () => {
@@ -2209,6 +2327,7 @@ export function ReportPage() {
     scanAbortControllerRef.current = null;
     scanJobIdRef.current = null;
     setRescanning(false);
+    setScanComplete(false);
     setScanningModalOpen(false);
   };
 
@@ -2216,11 +2335,11 @@ export function ReportPage() {
     <>
       <div className="rankio-report-page min-h-screen bg-[#0b1022] text-white">
         <header data-report-sticky-header className="report-screen-chrome sticky top-0 z-50 border-b border-border/40 bg-white backdrop-blur-md">
-          <div className="container mx-auto px-4 md:px-6">
-            <div className="flex h-16 items-center justify-between gap-4">
+          <div className="container mx-auto max-w-7xl px-4 md:px-6">
+            <div className="flex h-20 items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <Link to="/" className="flex items-center gap-2">
-                  <img src={darkLogo} alt="Rankio" className="h-8" />
+                  <img src={darkLogo} alt="Rankio" className="h-10 w-auto sm:h-12" />
                 </Link>
               </div>
 
@@ -2228,71 +2347,74 @@ export function ReportPage() {
             </div>
           </div>
 
-          <div className="border-t border-white/10 bg-[#0b1022]">
-            <div className="container mx-auto px-4 md:px-6">
-              <div className="flex min-h-12 items-center justify-between gap-4 overflow-x-auto py-2">
-                <div className="flex min-w-0 shrink-0 items-center gap-3 whitespace-nowrap">
-                {user && (
-                  <Link
-                    to="/dashboard"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to Dashboard
-                  </Link>
-                )}
-                </div>
+          {user && (
+            <div className="border-t border-white/10 bg-[#0b1022]">
+              <div className="container mx-auto max-w-7xl px-4 md:px-6">
+                <div className="flex min-h-12 items-center justify-between gap-4 overflow-x-auto py-2">
+                  <div className="flex min-w-0 shrink-0 items-center gap-3 whitespace-nowrap">
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() => requestLeaveLockedPreview(() => navigate("/dashboard"))}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back to Dashboard
+                    </button>
+                  )}
+                  </div>
 
-                <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
-                {!isGuest && activeReport?.website_id && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCompareWithPrevious}
-                    disabled={reportsLoading || !previousReport}
-                    title={
-                      reportsLoading
-                        ? "Checking previous reports..."
-                        : previousReport
-                          ? "Compare this report with the previous scan."
-                          : "No previous report is available for this website yet."
-                    }
-                    className="gap-2 disabled:opacity-100"
-                  >
-                    <BarChart3 className="h-4 w-4" />
-                    Compare with Previous
-                  </Button>
-                )}
-                {!isGuest && (
-                  <Button
-                    onClick={handleExport}
-                    size="sm"
-                    className="gap-2"
-                  >
-                    Export to PDF
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                )}
-                {!isGuest && (
+                  <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+                  {!isGuest && activeReport?.website_id && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleRescan}
-                      disabled={rescanning}
-                      title={rescanCreditNote}
+                      onClick={handleCompareWithPrevious}
+                      disabled={reportsLoading || !previousReport}
+                      title={
+                        reportsLoading
+                          ? "Checking previous reports..."
+                          : previousReport
+                            ? "Compare this report with the previous scan."
+                            : "No previous report is available for this website yet."
+                      }
+                      className="gap-2 disabled:opacity-100"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      Compare with Previous
+                    </Button>
+                  )}
+                  {!isGuest && (
+                    <Button
+                      onClick={handleExport}
+                      size="sm"
                       className="gap-2"
                     >
-                      <RefreshCw className={`h-4 w-4 ${rescanning ? "animate-spin" : ""}`} />
-                      {rescanning ? "Re-scanning..." : "Re-scan"}
+                      Export to PDF
+                      <ArrowRight className="h-4 w-4" />
                     </Button>
-                )}
+                  )}
+                  {!isGuest && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRescan}
+                        disabled={rescanning}
+                        title={rescanCreditNote}
+                        className="gap-2"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${rescanning ? "animate-spin" : ""}`} />
+                        {rescanning ? "Re-scanning..." : "Re-scan"}
+                      </Button>
+                  )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </header>
 
-        <main className="report-print-area container mx-auto px-4 py-8 md:px-6 md:py-10">
+        <main className="report-print-area container mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
           <section className="report-print-cover">
             <div>
               <p className="report-print-kicker">Rankio AI Visibility Report</p>
@@ -2320,7 +2442,7 @@ export function ReportPage() {
           </section>
           <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)]">
             <aside className="report-sidebar hidden lg:block">
-              <div className="sticky top-[150px] rounded-[24px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
+              <div className="sticky top-[7.5rem] rounded-[24px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
                 <p className="text-[24px] font-semibold tracking-tight text-white">Rankio Intelligence</p>
                 <p className="mt-1 text-sm text-white/45">v2.4 Ready</p>
 
@@ -2330,24 +2452,49 @@ export function ReportPage() {
                     { id: "ai-audit", label: "AI Audit", icon: Bot },
                     { id: "implementation-plan", label: "Evidence & Fixes", icon: ShieldCheck },
                     { id: "roadmap", label: "Roadmap", icon: Rocket },
-                  ].map((item, index) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveSection(item.id);
-                        scrollToReportSection(item.id);
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-[12px] border px-4 py-3 text-sm transition-all ${
-                        activeSection === item.id
-                          ? "border-white/15 bg-accent text-white shadow-[0_10px_24px_hsl(var(--accent)/0.25)]"
-                          : "border-white/8 bg-white/0 text-white/70 hover:bg-white/6 hover:text-white"
-                      }`}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
+                  ].map((item) => {
+                    const isLockedGuestTab = isGuest && item.id !== "executive-summary";
+
+                    const button = (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={isLockedGuestTab}
+                        onClick={() => {
+                          if (isLockedGuestTab) return;
+                          setActiveSection(item.id);
+                          scrollToReportSection(item.id);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-[12px] border px-4 py-3 text-sm transition-all ${
+                          activeSection === item.id
+                            ? "border-white/15 bg-accent text-white shadow-[0_10px_24px_hsl(var(--accent)/0.25)]"
+                            : isLockedGuestTab
+                              ? "cursor-not-allowed border-white/8 bg-white/[0.02] text-white/35 opacity-55"
+                              : "border-white/8 bg-white/0 text-white/70 hover:bg-white/6 hover:text-white"
+                        }`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+
+                    if (!isLockedGuestTab) {
+                      return button;
+                    }
+
+                    return (
+                      <Tooltip key={item.id}>
+                        <TooltipTrigger asChild>
+                          <span className="block cursor-not-allowed">
+                            {button}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          Premium Feature
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
                 </nav>
               </div>
             </aside>
@@ -2421,20 +2568,22 @@ export function ReportPage() {
                   </div>
 
                   <div className="space-y-6">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_hsl(var(--accent)/0.24)]">
-                        Report Customized For: {verticalProfile.audience}
-                      </span>
-                      <span className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-white/75">
-                        Industry: {projectLabel}
-                      </span>
-                    </div>
+                    {!isGuest ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_hsl(var(--accent)/0.24)]">
+                          Report Customized For: {verticalProfile.audience}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-white/75">
+                          Industry: {projectLabel}
+                        </span>
+                      </div>
+                    ) : null}
 
                     <div>
                       <h1 className="text-[34px] font-semibold tracking-tight text-white md:text-[54px] md:leading-[1.02]">
                         {verticalProfile.summaryTitle}
                       </h1>
-                      <p className="mt-5 max-w-3xl text-[16px] leading-8 text-white/65 md:text-[18px]">
+                      <p className={`mt-5 max-w-3xl text-[16px] leading-8 md:text-[18px] ${isGuest ? "text-[#f1cf7f]" : "text-white/65"}`}>
                         {summaryText}
                       </p>
                     </div>
@@ -2443,6 +2592,27 @@ export function ReportPage() {
                       <div className="flex items-center gap-3 text-white/75">
                         <Globe className="h-5 w-5 text-white/55" />
                         <span className="truncate text-[15px]">{display}</span>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Projected Score</p>
+                        <p className="mt-2 text-sm leading-6 text-white/72">
+                          Your estimated AI-readiness score out of 100 based on structure, content clarity, and technical quality.
+                        </p>
+                      </div>
+                      <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Maturity Level</p>
+                        <p className="mt-2 text-sm leading-6 text-white/72">
+                          <span className="font-semibold text-white/90">{maturityLabel(overallScore)}:</span> {maturityDescription(overallScore)}
+                        </p>
+                      </div>
+                      <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Customized For</p>
+                        <p className="mt-2 text-sm leading-6 text-white/72">
+                          This report is written for {verticalProfile.audience.toLowerCase()} so the recommendations match that team&apos;s priorities.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -2468,14 +2638,14 @@ export function ReportPage() {
                       {user ? (
                         <Button asChild>
                           <Link
-                            to="/dashboard/subscription"
+                            to="/dashboard/subscription?tab=plans"
                             state={{
                               from: `${location.pathname}${location.search}`,
                               reason: "report_unlock",
                               reportId: String(activeReport?.id ?? ""),
                             }}
                           >
-                            Choose a plan
+                            Choose a Plan
                           </Link>
                         </Button>
                       ) : (
@@ -2509,6 +2679,7 @@ export function ReportPage() {
                         {["Beginner", "Developing", "Optimized", "AI-Leading"].map((label, index) => (
                           <div key={label} className={index === 1 ? "text-white/80" : ""}>
                             <span className="block">{label}</span>
+                            <span className="mt-1 block text-[11px] text-white/35">{maturityShortDescription(label)}</span>
                             <span className="mt-2 inline-block h-1.5 w-1.5 rounded-full bg-white/35" />
                           </div>
                         ))}
@@ -2863,7 +3034,10 @@ export function ReportPage() {
         </main>
 
         <div className="report-screen-chrome">
-          <Footer variant="app" />
+          <Footer
+            variant="app"
+            onNavigate={(target) => requestLeaveLockedPreview(() => navigate(target))}
+          />
         </div>
       </div>
 
@@ -2877,7 +3051,7 @@ export function ReportPage() {
                   <Lock className="h-7 w-7 text-white" />
                 </div>
                 <DialogTitle className="text-2xl font-semibold tracking-tight text-white">
-                  Unlock your full AI report
+                  Unlock full AI visibility report
                 </DialogTitle>
                 <DialogDescription className="pt-2 text-sm leading-7 text-white/65">
                   {needsCreditTopUp
@@ -2904,14 +3078,14 @@ export function ReportPage() {
               <DialogFooter className="mt-6 gap-3 sm:justify-start">
                 <Button asChild>
                   <Link
-                    to="/dashboard/subscription"
+                    to="/dashboard/subscription?tab=plans"
                     state={{
                       from: `${location.pathname}${location.search}`,
                       reason: "report_unlock",
                       reportId: String(activeReport?.id ?? ""),
                     }}
                   >
-                    Choose a plan
+                    Choose a Plan
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -2919,7 +3093,53 @@ export function ReportPage() {
                   variant="outline"
                   onClick={() => setUpgradeOpen(false)}
                 >
-                  Continue preview
+                  Continue Preview
+                </Button>
+              </DialogFooter>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leavePreviewOpen} onOpenChange={setLeavePreviewOpen}>
+        <DialogContent className="overflow-hidden border-white/10 bg-[#11162a] p-0 text-white shadow-[0_30px_100px_rgba(0,0,0,0.5)] sm:max-w-xl">
+          <div className="relative p-6 sm:p-8">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_left,rgba(123,123,246,0.28),transparent_42%)]" />
+            <div className="relative">
+              <DialogHeader>
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent shadow-[0_16px_36px_hsl(var(--accent)/0.36)]">
+                  <Lock className="h-7 w-7 text-white" />
+                </div>
+                <DialogTitle className="text-2xl font-semibold tracking-tight text-white">
+                  Leave preview report?
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-sm leading-7 text-white/65">
+                  Your full AI report is still locked. Unlock now to view the complete audit, fixes, roadmap, and export-ready recommendations.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                  Detailed AI audit and technical findings
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                  Prioritized roadmap and recommendations
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                  Export-ready full report
+                </div>
+              </div>
+
+              <DialogFooter className="mt-6 gap-3 sm:justify-start">
+                <Button onClick={handleUnlockNow}>
+                  Unlock Now
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <Button variant="outline" onClick={handleLeaveAnyway}>
+                  Leave Anyway
                 </Button>
               </DialogFooter>
             </div>
@@ -2931,8 +3151,31 @@ export function ReportPage() {
         open={scanningModalOpen}
         onOpenChange={setScanningModalOpen}
         websiteUrl={scanTargetUrl}
+        isComplete={scanComplete}
         onStopScan={handleStopScan}
       />
+
+      <AlertDialog open={stalePromptOpen} onOpenChange={setStalePromptOpen}>
+        <AlertDialogContent className="border border-white/10 bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refresh before re-scanning?</AlertDialogTitle>
+            <AlertDialogDescription className="leading-6">
+              This page has been idle for a while. Refreshing will re-sync the report state before we start the next scan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setStalePromptOpen(false);
+                void startRescan();
+              }}
+            >
+              Scan anyway
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleRefreshRescan}>Refresh page</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} redirectTo={`${location.pathname}${location.search}`} />
     </>

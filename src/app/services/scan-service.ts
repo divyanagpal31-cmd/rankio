@@ -28,6 +28,37 @@ type CancelScanOptions = {
   accessToken?: string | null;
 };
 
+function toFriendlyScanError(message: string) {
+  const normalized = message.trim().toLowerCase();
+
+  if (
+    normalized.includes("name or service not known") ||
+    normalized.includes("failed to lookup address information") ||
+    normalized.includes("dns") ||
+    normalized.includes("enotfound")
+  ) {
+    return "We couldn’t reach that website. Please check the URL and try again.";
+  }
+
+  if (
+    normalized.includes("invalid url") ||
+    normalized.includes("unsupported protocol") ||
+    normalized.includes("relative url")
+  ) {
+    return "Please enter a valid website URL and try again.";
+  }
+
+  if (
+    normalized.includes("timed out") ||
+    normalized.includes("timeout") ||
+    normalized.includes("network error")
+  ) {
+    return "The scan took too long to start. Please try again in a moment.";
+  }
+
+  return "We couldn’t scan that website right now. Please try again.";
+}
+
 /**
  * Calls the Supabase Edge Function "scan" which wraps PageSpeed Insights.
  * It returns a cached report if a fresh one (<24h) exists, otherwise runs a new scan.
@@ -81,18 +112,36 @@ export async function runScan(url: string, options: RunScanOptions = {}): Promis
             const upgradeUrl = String(parsed?.upgrade_url ?? "").trim() || undefined;
 
             const msg = message || code;
-            if (code && details) return { error: msg ? `${msg}: ${details}` : details, errorCode: code, status, limit, used, upgradeUrl };
-            if (code) return { error: msg || code, errorCode: code, status, limit, used, upgradeUrl };
+            if (code && details) {
+              return {
+                error: toFriendlyScanError(msg ? `${msg}: ${details}` : details),
+                errorCode: code,
+                status,
+                limit,
+                used,
+                upgradeUrl,
+              };
+            }
+            if (code) {
+              return {
+                error: toFriendlyScanError(msg || code),
+                errorCode: code,
+                status,
+                limit,
+                used,
+                upgradeUrl,
+              };
+            }
           } catch {
             // not json, fall back to raw text
-            return { error: raw, status };
+            return { error: toFriendlyScanError(raw), status };
           }
         }
       } catch {
         // ignore context parsing failures
       }
     }
-    return { error: defaultMsg };
+    return { error: toFriendlyScanError(defaultMsg) };
   }
   if (typeof window !== "undefined" && accessToken) {
     window.dispatchEvent(new Event("rankio:subscription-updated"));

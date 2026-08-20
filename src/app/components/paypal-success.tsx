@@ -131,7 +131,7 @@ export function PayPalSuccess() {
       <div className="w-full rounded-3xl border border-border/60 bg-white p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-3">
           {loading ? <Loader2 className="h-6 w-6 animate-spin text-accent" /> : <CheckCircle2 className="h-6 w-6 text-green-600" />}
-          <h1 className="text-3xl font-bold text-primary">Payment confirmation</h1>
+          <h1 className="text-3xl font-bold text-primary">Payment Confirmation</h1>
         </div>
 
         {loading ? (

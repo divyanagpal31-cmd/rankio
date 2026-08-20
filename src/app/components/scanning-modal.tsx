@@ -23,14 +23,34 @@ const scanningSteps = [
   { id: 7, message: "Generating personalized report...", duration: 2000, icon: FileText },
 ];
 
+const scanProgressThresholds = [5, 10, 20, 35, 45, 75, 100];
+
+function deriveStepState(progress: number) {
+  if (progress >= 100) {
+    return {
+      currentStep: scanningSteps.length - 1,
+      completedSteps: scanningSteps.map((step) => step.id),
+    };
+  }
+
+  const currentStep = scanProgressThresholds.findIndex((threshold) => progress <= threshold);
+  const safeCurrentStep = currentStep === -1 ? scanningSteps.length - 1 : currentStep;
+
+  return {
+    currentStep: safeCurrentStep,
+    completedSteps: scanningSteps.slice(0, safeCurrentStep).map((step) => step.id),
+  };
+}
+
 interface ScanningModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   websiteUrl: string;
+  isComplete?: boolean;
   onStopScan?: () => void;
 }
 
-export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: ScanningModalProps) {
+export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = false, onStopScan }: ScanningModalProps) {
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -47,6 +67,10 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: Sc
       return;
     }
 
+    if (isComplete) {
+      return;
+    }
+
     const totalDuration = scanningSteps.reduce((sum, step) => sum + step.duration, 0);
     let elapsed = 0;
     let lastStep = -1;
@@ -54,7 +78,10 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: Sc
 
     const interval = window.setInterval(() => {
       elapsed += 50;
-      setProgress(Math.min((elapsed / totalDuration) * 100, 100));
+
+      const rawProgress = (elapsed / totalDuration) * 100;
+      const displayProgress = Math.min(rawProgress, 92);
+      setProgress(displayProgress);
 
       let accumulatedTime = 0;
       let currentStepIndex = scanningSteps.length - 1;
@@ -65,7 +92,9 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: Sc
           currentStepIndex = index;
           break;
         }
-        completed.add(scanningSteps[index].id);
+        if (index < scanningSteps.length - 1) {
+          completed.add(scanningSteps[index].id);
+        }
       }
 
       if (currentStepIndex !== lastStep) {
@@ -76,14 +105,34 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: Sc
 
       if (elapsed >= totalDuration) {
         window.clearInterval(interval);
-        setProgress(100);
+        setProgress(92);
         setCurrentStep(scanningSteps.length - 1);
-        setCompletedSteps(scanningSteps.map((step) => step.id));
+        setCompletedSteps(scanningSteps.slice(0, -1).map((step) => step.id));
       }
     }, 50);
 
     return () => window.clearInterval(interval);
-  }, [open]);
+  }, [open, isComplete]);
+
+  useEffect(() => {
+    if (!open || !isComplete) return;
+
+    setProgress((current) => Math.max(Math.floor(current), 92));
+    setCurrentStep(scanningSteps.length - 1);
+    setCompletedSteps(scanningSteps.map((step) => step.id));
+
+    const interval = window.setInterval(() => {
+      setProgress((current) => {
+        const next = Math.min(Math.floor(current) + 1, 100);
+        if (next >= 100) {
+          window.clearInterval(interval);
+        }
+        return next;
+      });
+    }, 180);
+
+    return () => window.clearInterval(interval);
+  }, [isComplete, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -165,7 +214,7 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: Sc
           <div className="relative flex min-h-0 flex-1 flex-col p-5 sm:p-7">
             <div className="shrink-0 pr-1 text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a9a7ff]">AI readiness scan</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Building your report</h2>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Building Your Report</h2>
               <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-white/68">
                 We’ll open your report automatically when it’s ready.
               </p>
@@ -216,8 +265,8 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: Sc
 
                 <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-xs leading-5 text-amber-100">
                   {progress >= 100
-                    ? "Finalizing your report now. Please keep this popup open."
-                    : "If progress reaches 100%, keep this popup open while we finish preparing your report."}
+                    ? "Finalizing your report now. We’ll open it automatically as soon as it’s ready."
+                    : "Once the report is ready, we’ll take you there automatically."}
                 </div>
               </div>
 
@@ -302,7 +351,7 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, onStopScan }: Sc
               Stop scan
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => setExitWarningOpen(false)}>
-              Continue scan
+              Continue Scan
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

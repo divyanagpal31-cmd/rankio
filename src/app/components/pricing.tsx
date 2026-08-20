@@ -39,7 +39,7 @@ export function Pricing() {
               <span className="text-[#242840]">No Subscriptions</span>
             </h2>
             <p className="mt-4 text-base leading-7 text-slate-500 md:text-lg">
-              Get detailed AI readiness insights. Pay only for what you need.
+              Purchase only the reports you need. No subscriptions, no hidden fees—just professional AI Visibility Reports with actionable recommendations for every website you analyze.
             </p>
           </div>
 
@@ -47,16 +47,16 @@ export function Pricing() {
             {paymentPlans.map((plan) => (
               <article
                 key={plan.id}
-                className={`group relative rounded-[2rem] border border-[#6c72e8] p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(91,91,214,0.16)] ${
+                className={`group relative rounded-[2rem] border border-[#6c72e8] px-5 py-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(91,91,214,0.16)] sm:px-7 sm:py-7 ${
                   plan.popular
-                    ? "bg-[#f8f7ff] shadow-[0_20px_60px_rgba(91,91,214,0.16)] scale-[1.02] hover:border-[#6a6af1] hover:bg-white"
+                    ? "bg-[#f8f7ff] shadow-[0_20px_60px_rgba(91,91,214,0.16)] hover:border-[#6a6af1] hover:bg-white sm:scale-[1.02]"
                     : "bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)] hover:border-[#6a6af1] hover:bg-[#fbfbff]"
                 }`}
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                     <span className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-accent/20">
-                      MOST POPULAR
+                      BEST VALUE
                     </span>
                   </div>
                 )}
@@ -64,7 +64,9 @@ export function Pricing() {
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-2xl font-semibold text-slate-900">{plan.name}</h3>
-                    <p className="mt-3 text-sm leading-6 text-slate-500">{plan.description}</p>
+                    <p className="mt-3 max-w-[96%] whitespace-normal text-[13px] leading-6 text-slate-500 xl:text-[14px]">
+                      {plan.description}
+                    </p>
                   </div>
 
                   <div className="flex items-end gap-1">
@@ -102,7 +104,7 @@ export function Pricing() {
           </div>
 
           <p className="mt-10 text-center text-sm text-slate-400">
-            All plans include secure processing, clear reporting, and regular product updates.
+            No recurring subscriptions • Industry-specific AI analysis • Actionable recommendations, not just scores • Professional reports you can share with your team
           </p>
         </div>
       </section>

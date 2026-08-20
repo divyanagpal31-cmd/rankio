@@ -1,7 +1,7 @@
 export function TrustSection() {
   return (
     <section className="py-16 bg-white border-y border-border/50">
-      <div className="container mx-auto px-4 md:px-6">
+      <div className="container mx-auto max-w-7xl px-4 md:px-6">
         <div className="text-center space-y-8">
           <p className="text-sm text-muted-foreground" style={{ fontWeight: 600, letterSpacing: '0.05em' }}>
             TRUSTED BY LEADING TEAMS

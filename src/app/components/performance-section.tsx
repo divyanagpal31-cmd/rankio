@@ -30,19 +30,19 @@ export function PerformanceSection() {
     <section className="bg-white pt-20 pb-0 md:pt-28 md:pb-0">
       <div className="container mx-auto max-w-7xl px-4 md:px-6">
         <div className="mx-auto mb-10 max-w-3xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight md:text-[42px]" style={{ lineHeight: 1.08 }}>
+          <h2 className="text-[28px] font-bold tracking-tight sm:text-3xl md:text-[42px]" style={{ lineHeight: 1.08 }}>
             <span className="bg-gradient-to-r from-[#585fc9] to-[#22283e] bg-clip-text text-transparent">
               AI-Ready Websites
             </span>{" "}
             <span className="text-[#22283e]">Perform Better</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-[18px] leading-[1.7] text-[#70839a]">
+          <p className="mx-auto mt-4 max-w-2xl text-[16px] leading-[1.7] text-[#70839a] sm:text-[18px]">
             Early data shows a clear shift toward AI-driven discovery and conversion.
           </p>
         </div>
 
-        <div className="grid items-stretch gap-10 lg:grid-cols-[1.18fr_0.82fr] lg:gap-14">
-          <div className="relative flex h-full w-full items-end">
+        <div className="grid items-stretch gap-8 lg:grid-cols-[1.18fr_0.82fr] lg:items-end lg:gap-14">
+          <div className="relative flex h-full w-full items-end self-end">
             <img
               src={performanceImage}
               alt="AI-ready websites perform better"
@@ -50,7 +50,7 @@ export function PerformanceSection() {
             />
           </div>
 
-          <div className="self-center space-y-0 lg:pr-2">
+          <div className="self-center space-y-0 pb-8 lg:self-end lg:pr-2 lg:pb-12">
             {points.map((point, index) => (
               <article
                 key={point.title}

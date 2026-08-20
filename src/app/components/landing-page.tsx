@@ -4,10 +4,11 @@ import { Header } from "./header";
 import { HeroSection } from "./hero-section";
 import { WhyRankioExists } from "./why-rankio-exists";
 import { Features } from "./features";
+import { WhyAiVisibilityMatters } from "./why-ai-visibility-matters";
 import { PerformanceSection } from "./performance-section";
 import { HowItWorks } from "./how-it-works";
-import { Pricing } from "./pricing";
 import { SampleReport } from "./sample-report";
+import { Pricing } from "./pricing";
 import { WhyRankio } from "./why-rankio";
 import { FaqSection } from "./faq-section";
 import { FinalCTA } from "./final-cta";
@@ -40,10 +41,11 @@ export function LandingPage() {
         <HeroSection />
         <WhyRankioExists />
         <Features />
+        <WhyAiVisibilityMatters />
         <PerformanceSection />
         <HowItWorks />
-        <Pricing />
         <SampleReport />
+        <Pricing />
         <WhyRankio />
         <FaqSection />
         <FinalCTA />

@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { Link } from "react-router";
 
 import lightLogo from "../../assets/c96eb4a1a4dc0f6986adfdbb56831fc1fd8cf6e5.png";
@@ -8,67 +9,128 @@ type FooterVariant = "landing" | "app";
 type FooterProps = {
   variant?: FooterVariant;
   className?: string;
+  onNavigate?: (target: string) => void;
 };
 
-export function Footer({ variant = "landing", className }: FooterProps) {
+export function Footer({ variant = "landing", className, onNavigate }: FooterProps) {
+  const handleNavigate =
+    (target: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+      if (!onNavigate) return;
+      event.preventDefault();
+      onNavigate(target);
+    };
+
+  const productLinks =
+    variant === "landing"
+      ? [
+          { label: "Platform", href: "#why-rankio-exists" },
+          { label: "Solutions", href: "#features" },
+          { label: "Sample Report", href: "#sample-report" },
+          { label: "Pricing", href: "#pricing" },
+        ]
+      : [
+          { label: "Platform", href: "/#features" },
+          { label: "Industries", href: "/#features" },
+          { label: "Sample Report", href: "/#sample-report" },
+          { label: "Pricing", href: "/#pricing" },
+        ];
+
   return (
-    <footer className={cn("border-t border-white/10 bg-[#0b1027] py-12 text-white/70", className)}>
-      <div className="container mx-auto px-4 md:px-6">
-        <div className="mb-8 space-y-4 text-center">
-          <div className="flex justify-center">
-            <Link to="/" className="inline-flex">
-              <img src={lightLogo} alt="Rankio" className="h-12" />
+    <footer className={cn("border-t border-white/10 bg-[#0b1027] text-white/70", className)}>
+      <div className="container mx-auto max-w-7xl px-4 pb-16 pt-20 md:px-6 lg:pb-18 lg:pt-24">
+        <div className="grid gap-10 md:grid-cols-2 xl:grid-cols-4">
+          <div className="max-w-sm">
+            <Link to="/" className="inline-flex items-center gap-3" onClick={handleNavigate("/")}>
+              <img src={lightLogo} alt="Rankio" className="h-12 w-auto" />
             </Link>
+            <p className="mt-4 text-sm leading-7">
+              Understand how AI-powered search engines and assistants interpret your website with industry-specific AI Visibility Reports.
+            </p>
           </div>
-          {/* <p className="mx-auto max-w-md text-base text-white/60">
-            AI-powered website intelligence for the modern web.
-          </p> */}
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em]">Product</h3>
+            <ul className="mt-5 space-y-3 text-sm">
+              {productLinks.map((item) => (
+                <li key={item.label}>
+                  {item.href.startsWith("mailto:") ? (
+                    <a href={item.href} className="transition-colors hover:text-white">
+                      {item.label}
+                    </a>
+                  ) : variant === "landing" ? (
+                    <a href={item.href} className="transition-colors hover:text-white">
+                      {item.label}
+                    </a>
+                  ) : (
+                    <Link to={item.href} className="transition-colors hover:text-white" onClick={handleNavigate(item.href)}>
+                      {item.label}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em]">Resources</h3>
+            <ul className="mt-5 space-y-3 text-sm">
+              <li>
+                <a href="/#faq" className="transition-colors hover:text-white">
+                  FAQs
+                </a>
+              </li>
+              <li>
+                <a href="mailto:support@rankio.ai" className="transition-colors hover:text-white">
+                  Contact
+                </a>
+              </li>
+              <li>
+                <Link to="/privacy" className="transition-colors hover:text-white" onClick={handleNavigate("/privacy")}>
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms" className="transition-colors hover:text-white" onClick={handleNavigate("/terms")}>
+                  Terms of Service
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-[0.18em]">Connect</h3>
+            <ul className="mt-5 space-y-3 text-sm">
+              <li>
+                <a href="https://www.linkedin.com" target="_blank" rel="noreferrer" className="transition-colors hover:text-white">
+                  LinkedIn
+                </a>
+              </li>
+              <li>
+                <a href="https://x.com" target="_blank" rel="noreferrer" className="transition-colors hover:text-white">
+                  X (Twitter)
+                </a>
+              </li>
+              <li>
+                <a href="mailto:support@rankio.ai" className="transition-colors hover:text-white">
+                  Email
+                </a>
+              </li>
+              <li>
+                <a href="mailto:support@rankio.ai" className="transition-colors hover:text-white">
+                  Support
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
 
-        <div className="mb-8 flex flex-wrap items-center justify-center gap-8">
-          {variant === "landing" ? (
-            <>
-              <a href="#features" className="text-sm transition-colors hover:text-white">
-                Industries
-              </a>
-              <a href="#how-it-works" className="text-sm transition-colors hover:text-white">
-                How It Works
-              </a>
-              <a href="#pricing" className="text-sm transition-colors hover:text-white">
-                Pricing
-              </a>
-              <a href="#sample-report" className="text-sm transition-colors hover:text-white">
-                Sample Report
-              </a>
-            </>
-          ) : (
-            <>
-              <Link to="/#features" className="text-sm transition-colors hover:text-white">
-                Industries
-              </Link>
-              <Link to="/#how-it-works" className="text-sm transition-colors hover:text-white">
-                How It Works
-              </Link>
-              <Link to="/#pricing" className="text-sm transition-colors hover:text-white">
-                Pricing
-              </Link>
-              <Link to="/#sample-report" className="text-sm transition-colors hover:text-white">
-                Sample Report
-              </Link>
-            </>
-          )}
-        </div>
-
-        <div className="flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 md:flex-row">
-          <p className="text-sm text-white/50">© 2026 Rankio. All rights reserved.</p>
-          <div className="flex items-center gap-6">
-            <Link to="/terms" className="text-sm text-white/50 transition-colors hover:text-white">
-              Terms of Use
-            </Link>
-            <Link to="/privacy" className="text-sm text-white/50 transition-colors hover:text-white">
-              Privacy Policy
-            </Link>
-          </div>
+        <div className="mt-12 border-t border-white/10 pt-8">
+          <p className="max-w-4xl text-sm leading-7">
+            Rankio helps businesses understand how AI-powered search systems interpret their websites. We do not guarantee rankings, citations, or search placement. Recommendations are based on current best practices and publicly available web standards.
+          </p>
+          <p className="mt-4 text-sm font-medium">
+            © 2026 Rankio.ai. All rights reserved.
+          </p>
         </div>
       </div>
     </footer>

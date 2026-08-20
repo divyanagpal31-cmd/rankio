@@ -2,22 +2,66 @@ import { ArrowRight, Sparkles, Zap, MessageCircle, Database, TrendingUp, Grid3x3
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScanningModal } from "./scanning-modal";
 import { cancelScan, runScan } from "../services/scan-service";
+import { normalizeWebsiteInput } from "../services/website-input";
 import { useNavigate } from "react-router";
 import { useAuth } from "../providers/auth-provider";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import { clearPendingScanUrl, isScanStateStale, readPendingScanUrl, writePendingScanUrl } from "../services/scan-staleness";
 
 export function HeroSection() {
+  const SCAN_COMPLETE_DELAY_MS = 4700;
+  const STALE_SCAN_IDLE_MS = 10 * 60 * 1000;
   const [scanningModalOpen, setScanningModalOpen] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [urlError, setUrlError] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanComplete, setScanComplete] = useState(false);
+  const [stalePromptOpen, setStalePromptOpen] = useState(false);
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const scanJobIdRef = useRef<string | null>(null);
+  const lastActiveAtRef = useRef(Date.now());
+
+  useEffect(() => {
+    const markActive = () => {
+      lastActiveAtRef.current = Date.now();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markActive();
+      }
+    };
+
+    markActive();
+    window.addEventListener("focus", markActive);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const pendingUrl = readPendingScanUrl();
+    if (pendingUrl) {
+      clearPendingScanUrl();
+      setWebsiteUrl((current) => current || pendingUrl);
+    }
+
+    return () => {
+      window.removeEventListener("focus", markActive);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   const validateUrl = (value: string) => {
     if (!value.trim()) {
@@ -25,14 +69,13 @@ export function HeroSection() {
       return false;
     }
 
-    // Regular expression for URL validation
-    const urlPattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/;
-    
-    if (!urlPattern.test(value)) {
-      setUrlError("Please enter a valid website URL");
+    try {
+      normalizeWebsiteInput(value);
+    } catch (error) {
+      setUrlError(error instanceof Error ? error.message : "Please enter a valid website URL");
       return false;
     }
-    
+
     setUrlError("");
     return true;
   };
@@ -47,18 +90,21 @@ export function HeroSection() {
     }
   };
 
-  const handleScanWebsite = async () => {
+  const startScan = async () => {
     if (!validateUrl(websiteUrl)) return;
     setScanError(null);
 
     setIsScanning(true);
+    setScanComplete(false);
     setScanningModalOpen(true);
     const scanAbortController = new AbortController();
     const scanJobId = crypto.randomUUID();
     scanAbortControllerRef.current = scanAbortController;
     scanJobIdRef.current = scanJobId;
 
-    const { data, error } = await runScan(websiteUrl, {
+    const normalizedWebsiteUrl = normalizeWebsiteInput(websiteUrl);
+
+    const { data, error } = await runScan(normalizedWebsiteUrl, {
       accessToken: session?.access_token,
       requireAuth: !!user,
       signal: scanAbortController.signal,
@@ -81,13 +127,32 @@ export function HeroSection() {
       } catch {
         // ignore storage failures (quota/private mode)
       }
+      setScanComplete(true);
+      await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
       setScanningModalOpen(false);
+      setScanComplete(false);
       navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from: "/", report: data } });
       return;
     }
 
     setScanningModalOpen(false);
+    setScanComplete(false);
     navigate("/report");
+  };
+
+  const handleScanWebsite = async () => {
+    if (isScanStateStale(lastActiveAtRef.current, STALE_SCAN_IDLE_MS)) {
+      writePendingScanUrl(websiteUrl);
+      setStalePromptOpen(true);
+      return;
+    }
+
+    await startScan();
+  };
+
+  const handleRefreshScan = () => {
+    writePendingScanUrl(websiteUrl);
+    window.location.reload();
   };
 
   const handleStopScan = () => {
@@ -96,6 +161,7 @@ export function HeroSection() {
     scanAbortControllerRef.current = null;
     scanJobIdRef.current = null;
     setIsScanning(false);
+    setScanComplete(false);
     setScanningModalOpen(false);
   };
 
@@ -107,7 +173,7 @@ export function HeroSection() {
 
   return (
     <>
-      <section className="relative overflow-hidden bg-gradient-to-br from-primary via-[#1a1f3a] to-primary py-24 md:py-32">
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary via-[#1a1f3a] to-primary py-16 sm:py-20 md:py-32">
         {/* Layered background effects */}
         <div className="absolute inset-0">
           {/* Enhanced grid pattern */}
@@ -142,9 +208,9 @@ export function HeroSection() {
         </div>
         
         <div className="container relative mx-auto px-4 md:px-6 max-w-7xl">
-          <div className="grid gap-12 lg:grid-cols-2 lg:gap-24 items-center justify-items-center m-[0px]">
+          <div className="grid items-center justify-items-center gap-10 md:grid-cols-2 md:gap-12 lg:gap-24">
             {/* Left side - Content */}
-            <div className="space-y-8 w-full max-w-xl">
+            <div className="w-full max-w-[40rem] space-y-8 md:max-w-none">
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -152,7 +218,7 @@ export function HeroSection() {
                 className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-4 py-1.5 border border-accent/20 backdrop-blur-sm"
               >
                 <Sparkles className="h-4 w-4 text-accent" />
-                <span className="text-sm text-white/90">AI-Powered Website Intelligence</span>
+                <span className="text-sm text-white/90">AI Visibility Intelligence Platform</span>
               </motion.div>
               
               <motion.div 
@@ -161,9 +227,15 @@ export function HeroSection() {
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="space-y-6"
               >
-                <h1 className="tracking-tight bg-gradient-to-r from-white via-accent/30 to-purple-400 bg-clip-text text-transparent text-[48px]" style={{ fontWeight: 700, lineHeight: 1.1 }}>Is Your Website AI-Ready for the Future of Search?</h1>
-                <p className="text-white/80 max-w-xl text-[20px]" style={{ lineHeight: 1.5 }}>
-                  Rankio.ai analyzes your website's structure, SEO signals, and user clarity — helping you stay visible across search engines and AI assistants.
+                <h1
+                  className="max-w-none text-[38px] font-bold tracking-tight bg-gradient-to-r from-white via-white/90 to-[#c59bff] bg-clip-text text-transparent sm:text-[48px] md:text-[42px] lg:text-[56px]"
+                  style={{ lineHeight: 1.08 }}
+                >
+                  <span className="block">Measure Your</span>
+                  <span className="block">Website's AI Visibility</span>
+                </h1>
+                <p className="max-w-xl text-[16px] leading-7 text-white/80 sm:text-[18px] md:max-w-[34rem] md:text-[17px] lg:text-[20px]">
+                  Rankio analyzes your website the way modern AI search engines and assistants do. Get a detailed AI Visibility Report with actionable recommendations to improve how your business is understood, trusted, and recommended by AI.
                 </p>
               </motion.div>
 
@@ -175,11 +247,11 @@ export function HeroSection() {
                 className="space-y-4 text-center lg:text-left"
               >
                 <div className="space-y-2">
-                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-center lg:justify-start">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-start">
                     <Input
                       type="url"
-                      placeholder="https://yourwebsite.com"
-                      className={`flex-1 h-14 px-5 py-4 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:bg-white/20 focus:border-accent text-base ${
+                      placeholder="Enter your website URL"
+                      className={`h-12 w-full px-4 py-3 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:bg-white/20 focus:border-accent text-base sm:flex-1 ${
                         urlError ? "border-red-400 focus:border-red-400" : ""
                       }`}
                       value={websiteUrl}
@@ -188,12 +260,12 @@ export function HeroSection() {
                     />
                     <Button 
                       size="lg"
-                      className="gap-2 disabled:cursor-not-allowed"
+                      className="w-full gap-2 disabled:cursor-not-allowed sm:w-auto"
                       style={{ fontWeight: 600 }}
                       onClick={handleScanWebsite}
                       disabled={!websiteUrl.trim() || !!urlError || isScanning}
                     >
-                      {isScanning ? "Scanning..." : "Scan My Website"}
+                      {isScanning ? "Scanning..." : "Generate My AI Report"}
                       <ArrowRight className="h-5 w-5" />
                     </Button>
                   </div>
@@ -205,17 +277,17 @@ export function HeroSection() {
                   )}
                 </div>
                 <p className="text-sm text-white/60">
-                  Free scan • No credit card required
+                  Free summary • No credit card required
                 </p>
                 <a href="#sample-report" className="text-white/90 hover:text-white text-sm font-medium underline underline-offset-4 inline-block">
-                  View Sample Report
+                  See Sample AI Visibility Report
                 </a>
               </motion.div>
             </div>
 
             {/* Right side - Dynamic AI Intelligence Display */}
-            <div className="lg:flex justify-center w-full lg:ml-12">
-              <div className="relative w-full max-w-md">
+            <div className="hidden w-full justify-center md:flex md:mt-2 lg:mt-0 lg:ml-12">
+              <div className="relative w-full max-w-2xl px-8 md:scale-[0.95] lg:max-w-none lg:px-0 lg:scale-100">
                 {/* Main central glow */}
                 <div className="absolute inset-0 bg-gradient-to-br from-accent/30 via-purple-500/20 to-accent/30 blur-3xl"></div>
                 
@@ -224,17 +296,17 @@ export function HeroSection() {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.6, delay: 0.3 }}
-                  className="relative bg-white/95 backdrop-blur-xl border border-white/20 rounded-2xl p-6 shadow-2xl z-10 max-w-xs mx-auto mt-16 lg:mt-0 lg:max-w-none lg:p-8"
+                className="relative z-20 mx-auto mt-12 max-w-full overflow-visible rounded-2xl border border-white/20 bg-white/95 px-6 py-6 shadow-2xl backdrop-blur-xl sm:mt-16 sm:max-w-xl sm:px-8 sm:py-8 lg:mt-0 lg:max-w-none lg:px-10 lg:py-10"
                 >
                   <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm text-muted-foreground" style={{ fontWeight: 600 }}>AI READINESS SCORE</h3>
-                      <span className="text-xs text-accent bg-accent/10 px-2 py-1 rounded font-semibold">LIVE</span>
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm text-muted-foreground" style={{ fontWeight: 600 }}>AI Visibility Score</h3>
+                      <span className="rounded bg-accent/10 px-2 py-1 text-xs font-semibold text-accent">LIVE</span>
                     </div>
                     
                     {/* Circular Score */}
                     <div className="flex items-center justify-center">
-                      <div className="relative h-44 w-44">
+                      <div className="relative h-40 w-40 sm:h-44 sm:w-44">
                         {/* Background circle */}
                         <svg className="h-full w-full -rotate-90">
                           <circle
@@ -272,7 +344,7 @@ export function HeroSection() {
                             initial={{ opacity: 0, scale: 0.5 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ duration: 0.6, delay: 0.8 }}
-                            className="text-5xl text-primary" 
+                            className="text-4xl text-primary sm:text-5xl" 
                             style={{ fontWeight: 700 }}
                           >
                             72
@@ -337,7 +409,7 @@ export function HeroSection() {
                   initial={{ opacity: 0, x: -20, y: 20 }}
                   animate={{ opacity: 1, x: 0, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.6 }}
-                  className="absolute -top-12 -left-8 bg-white/80 backdrop-blur-xl border border-purple-200/50 rounded-xl p-3 shadow-lg z-20"
+                className="absolute -left-8 -top-12 z-30 hidden rounded-xl border border-purple-200/50 bg-white/80 p-3 shadow-lg backdrop-blur-xl md:block xl:block"
                   style={{
                     boxShadow: "0 8px 32px rgba(91, 91, 214, 0.15)"
                   }}
@@ -351,8 +423,8 @@ export function HeroSection() {
                       <Zap className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground font-medium">PageSpeed</div>
-                      <div className="text-lg font-bold text-primary">92</div>
+                      <div className="text-xs font-medium text-primary">Content</div>
+                      <div className="text-xs font-medium text-primary">Understanding</div>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -362,7 +434,7 @@ export function HeroSection() {
                   initial={{ opacity: 0, x: 20, y: 20 }}
                   animate={{ opacity: 1, x: 0, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.7 }}
-                  className="absolute -top-4 -right-12 bg-white/80 backdrop-blur-xl border border-accent/30 rounded-xl p-3 shadow-lg z-20"
+                  className="absolute -top-[2rem] -right-[1rem] z-30 hidden w-[132px] rounded-2xl border border-accent/30 bg-white/80 p-3 shadow-lg backdrop-blur-xl md:block xl:block"
                   style={{
                     boxShadow: "0 8px 32px rgba(91, 91, 214, 0.15)"
                   }}
@@ -376,8 +448,8 @@ export function HeroSection() {
                       <MessageCircle className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground font-medium">AEO</div>
-                      <div className="text-sm font-semibold text-accent">Optimized</div>
+                      <div className="text-xs font-medium text-primary">Structured</div>
+                      <div className="text-xs font-medium text-primary">Data</div>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -387,7 +459,7 @@ export function HeroSection() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.6, delay: 0.8 }}
-                  className="absolute top-1/3 -left-4 lg:-left-16 bg-white/80 backdrop-blur-xl border border-accent/20 rounded-xl p-3 shadow-lg z-20"
+                  className="absolute top-1/3 -left-4 z-30 hidden w-[112px] -translate-y-1/2 rounded-2xl border border-accent/20 bg-white/80 p-3 shadow-lg backdrop-blur-xl md:block xl:block"
                   style={{
                     boxShadow: "0 8px 32px rgba(91, 91, 214, 0.15)"
                   }}
@@ -401,8 +473,8 @@ export function HeroSection() {
                       <Database className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground font-medium">Schema</div>
-                      <div className="text-sm font-semibold text-accent">Valid</div>
+                      <div className="text-xs font-medium text-primary">Brand</div>
+                      <div className="text-xs font-medium text-primary">Identity</div>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -412,7 +484,7 @@ export function HeroSection() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.6, delay: 0.9 }}
-                  className="absolute top-1/2 -right-4 lg:-right-14 bg-white/80 backdrop-blur-xl border border-green-200/50 rounded-xl p-3 shadow-lg z-20"
+                  className="absolute top-1/2 -right-4 z-30 hidden w-[122px] -translate-y-1/2 rounded-2xl border border-green-200/50 bg-white/80 p-3 shadow-lg backdrop-blur-xl md:block xl:block"
                   style={{
                     boxShadow: "0 8px 32px rgba(91, 91, 214, 0.15)"
                   }}
@@ -426,8 +498,8 @@ export function HeroSection() {
                       <TrendingUp className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground font-medium">SEO</div>
-                      <div className="text-lg font-bold text-green-600">A+</div>
+                      <div className="text-xs font-medium text-primary">Technical</div>
+                      <div className="text-xs font-medium text-primary">Foundation</div>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -437,7 +509,7 @@ export function HeroSection() {
                   initial={{ opacity: 0, x: -20, y: -20 }}
                   animate={{ opacity: 1, x: 0, y: 0 }}
                   transition={{ duration: 0.6, delay: 1 }}
-                  className="absolute -bottom-8 -left-12 bg-white/80 backdrop-blur-xl border border-indigo-200/50 rounded-xl p-3 shadow-lg z-20"
+                  className="absolute -bottom-8 -left-12 z-30 hidden w-[118px] rounded-2xl border border-indigo-200/50 bg-white/80 p-3 shadow-lg backdrop-blur-xl md:block xl:block"
                   style={{
                     boxShadow: "0 8px 32px rgba(91, 91, 214, 0.15)"
                   }}
@@ -450,9 +522,9 @@ export function HeroSection() {
                     <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                       <Grid3x3 className="h-4 w-4 text-white" />
                     </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground font-medium">UX</div>
-                      <div className="text-sm font-semibold text-indigo-600">Clear</div>
+                    <div className="min-w-0 leading-tight">
+                      <div className="text-[11px] font-medium text-primary">Citation</div>
+                      <div className="text-[11px] font-medium text-primary">Readiness</div>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -462,7 +534,7 @@ export function HeroSection() {
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.6, delay: 1.1 }}
-                  className="absolute -bottom-6 right-4 bg-gradient-to-r from-accent to-purple-600 rounded-full px-4 py-2 shadow-lg z-20"
+                  className="absolute -bottom-6 right-4 z-30 hidden rounded-full bg-gradient-to-r from-accent to-purple-600 px-4 py-2 shadow-lg md:block xl:block"
                   style={{
                     boxShadow: "0 8px 32px rgba(91, 91, 214, 0.3)"
                   }}
@@ -491,8 +563,31 @@ export function HeroSection() {
         open={scanningModalOpen}
         onOpenChange={setScanningModalOpen}
         websiteUrl={websiteUrl}
+        isComplete={scanComplete}
         onStopScan={handleStopScan}
       />
+
+      <AlertDialog open={stalePromptOpen} onOpenChange={setStalePromptOpen}>
+        <AlertDialogContent className="border border-white/10 bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refresh before scanning?</AlertDialogTitle>
+            <AlertDialogDescription className="leading-6">
+              This page has been idle for a while. Refreshing will re-sync the session state before we start the scan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setStalePromptOpen(false);
+                void startScan();
+              }}
+            >
+              Scan anyway
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleRefreshScan}>Refresh page</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

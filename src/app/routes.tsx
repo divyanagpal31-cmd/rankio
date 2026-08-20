@@ -12,59 +12,65 @@ import { TermsOfUse } from "./components/terms-of-use";
 import { PrivacyPolicy } from "./components/privacy-policy";
 import { PayPalSuccess } from "./components/paypal-success";
 import { PayPalCancel } from "./components/paypal-cancel";
+import { ScrollManager } from "./components/scroll-manager";
 
 export const router = createBrowserRouter([
   {
-    path: "/",
-    element: <LandingPage />,
-  },
-  {
-    path: "/terms",
-    element: <TermsOfUse />,
-  },
-  {
-    path: "/privacy",
-    element: <PrivacyPolicy />,
-  },
-  {
-    path: "/report",
-    element: <ReportPage />,
-  },
-  {
-    path: "/paypal/success",
-    element: <PayPalSuccess />,
-  },
-  {
-    path: "/paypal/cancel",
-    element: <PayPalCancel />,
-  },
-  {
-    path: "/dashboard",
-    element: (
-      <ProtectedRoute>
-        <DashboardLayout />
-      </ProtectedRoute>
-    ),
+    element: <ScrollManager />,
     children: [
       {
-        index: true,
-        element: <Overview />,
+        path: "/",
+        element: <LandingPage />,
       },
       {
-        path: "reports",
-        element: <MyWebsites />,
+        path: "/terms",
+        element: <TermsOfUse />,
       },
       {
-        path: "reports/compare",
-        element: <ReportComparisonPage />,
+        path: "/privacy",
+        element: <PrivacyPolicy />,
       },
       {
-        path: "subscription",
-        element: <Subscription />,
+        path: "/report",
+        element: <ReportPage />,
       },
       {
-        path: "settings",
-        element: <ProfileSettings />,
+        path: "/paypal/success",
+        element: <PayPalSuccess />,
+      },
+      {
+        path: "/paypal/cancel",
+        element: <PayPalCancel />,
+      },
+      {
+        path: "/dashboard",
+        element: (
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          {
+            index: true,
+            element: <Overview />,
+          },
+          {
+            path: "reports",
+            element: <MyWebsites />,
+          },
+          {
+            path: "reports/compare",
+            element: <ReportComparisonPage />,
+          },
+          {
+            path: "subscription",
+            element: <Subscription />,
+          },
+          {
+            path: "settings",
+            element: <ProfileSettings />,
+          },
+        ],
       },
     ],
   },

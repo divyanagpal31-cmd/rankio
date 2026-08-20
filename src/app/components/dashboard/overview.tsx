@@ -15,24 +15,13 @@ import {
 import { useStats } from "../../services/data-hooks";
 import { useAuth } from "../../providers/auth-provider";
 import { cancelScan, runScan } from "../../services/scan-service";
+import { normalizeWebsiteInput } from "../../services/website-input";
 import { ScanningModal } from "../scanning-modal";
 import { Link } from "react-router";
 import { useLocation, useNavigate } from "react-router";
 
-function normalizeUrl(raw: string): string {
-  let urlValue = raw.trim();
-  if (!/^https?:\/\//i.test(urlValue)) urlValue = `https://${urlValue}`;
-  const url = new URL(urlValue);
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Invalid protocol");
-  if (!url.hostname.includes(".") || url.hostname.startsWith(".") || url.hostname.endsWith(".")) {
-    throw new Error("Invalid hostname");
-  }
-  url.hash = "";
-  if (url.pathname === "/") url.pathname = "";
-  return url.toString().replace(/\/$/, "");
-}
-
 export function Overview() {
+  const SCAN_COMPLETE_DELAY_MS = 4700;
   const { stats, loading } = useStats();
   const { user, session } = useAuth();
   const navigate = useNavigate();
@@ -44,16 +33,17 @@ export function Overview() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [scanningModalOpen, setScanningModalOpen] = useState(false);
   const [scanTargetUrl, setScanTargetUrl] = useState("");
+  const [scanComplete, setScanComplete] = useState(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const scanJobIdRef = useRef<string | null>(null);
 
   const validateNewWebsiteUrl = (value: string) => {
     if (!value.trim()) return "Website URL is required";
     try {
-      normalizeUrl(value);
+      normalizeWebsiteInput(value);
       return "";
-    } catch {
-      return "Please enter a valid website URL";
+    } catch (error) {
+      return error instanceof Error ? error.message : "Please enter a valid website URL";
     }
   };
 
@@ -76,8 +66,9 @@ export function Overview() {
     setAdding(true);
     setNewWebsiteError(null);
     setActionError(null);
+    setScanComplete(false);
 
-    const normalized = normalizeUrl(newWebsiteUrl);
+    const normalized = normalizeWebsiteInput(newWebsiteUrl);
     setAddOpen(false);
     setNewWebsiteUrl("");
     setScanTargetUrl(normalized);
@@ -106,7 +97,10 @@ export function Overview() {
     }
 
     const from = `${location.pathname}${location.search}`;
+    setScanComplete(true);
+    await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
     setScanningModalOpen(false);
+    setScanComplete(false);
     navigate(data?.id ? `/report?reportId=${encodeURIComponent(data.id)}` : "/report", {
       state: { from, report: data },
     });
@@ -118,6 +112,7 @@ export function Overview() {
     scanAbortControllerRef.current = null;
     scanJobIdRef.current = null;
     setAdding(false);
+    setScanComplete(false);
     setScanningModalOpen(false);
   };
 
@@ -325,7 +320,7 @@ export function Overview() {
             <Label htmlFor="dashboardWebsiteUrl">Website URL</Label>
             <Input
               id="dashboardWebsiteUrl"
-              placeholder="example.com"
+              placeholder="Enter your website URL"
               value={newWebsiteUrl}
               onChange={(event) => {
                 setNewWebsiteUrl(event.target.value);
@@ -368,6 +363,7 @@ export function Overview() {
         open={scanningModalOpen}
         onOpenChange={setScanningModalOpen}
         websiteUrl={scanTargetUrl}
+        isComplete={scanComplete}
         onStopScan={handleStopScan}
       />
     </div>

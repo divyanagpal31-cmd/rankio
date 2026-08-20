@@ -5,6 +5,7 @@ import { Link, useLocation } from "react-router";
 import { usePaymentTransactions, useReportUnlockHistory, useSubscription, useSubscriptionHistory } from "../../services/data-hooks";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useAuth } from "../../providers/auth-provider";
 import { supabase } from "../../../lib/supabase";
@@ -18,9 +19,37 @@ function getPlanFromSearch(search: string): PaymentPlanId | null {
   return value === "starter" || value === "growth" || value === "pro" ? (value as PaymentPlanId) : null;
 }
 
+function getTabFromSearch(search: string): "overview" | "plans" | "billing" | "reports" | null {
+  const value = new URLSearchParams(search).get("tab")?.trim() ?? "";
+  return value === "overview" || value === "plans" || value === "billing" || value === "reports" ? value : null;
+}
+
 function getReportIdFromSearch(search: string): string | null {
   return new URLSearchParams(search).get("reportId")?.trim() ?? null;
 }
+
+const billingFaqs = [
+  {
+    question: "When am I charged?",
+    answer:
+      "You’re charged when you complete checkout. Starter and Team Pack are one-time purchases, so there are no recurring subscription charges.",
+  },
+  {
+    question: "Can I upgrade later?",
+    answer:
+      "Yes. You can start with a smaller package and move to a larger plan when you need more report credits or additional team capacity.",
+  },
+  {
+    question: "Do unused reports expire?",
+    answer:
+      "Unused credits remain available according to your plan settings. Your billing history and credit usage section will show how many reports are still available.",
+  },
+  {
+    question: "How do I get help with billing?",
+    answer:
+      "Email the Rankio team at sales@rankio.ai and we’ll help with plan questions, payment issues, or account access.",
+  },
+];
 
 export function Subscription() {
   const { subscription } = useSubscription();
@@ -37,11 +66,19 @@ export function Subscription() {
 
   const navigationState = (location.state as any) ?? null;
   const requestedPlan = useMemo(() => getPlanFromSearch(location.search), [location.search]);
+  const requestedTab = useMemo(() => getTabFromSearch(location.search), [location.search]);
   const reportIdFromState = typeof navigationState?.reportId === "string" ? navigationState.reportId.trim() : "";
   const reportId = useMemo(
     () => getReportIdFromSearch(location.search) ?? (reportIdFromState || null),
     [location.search, reportIdFromState]
   );
+  const initialTab = requestedTab ?? (requestedPlan || navigationState?.reason === "report_unlock" ? "plans" : "overview");
+
+  useEffect(() => {
+    if (requestedTab === "plans" || requestedPlan || navigationState?.reason === "report_unlock") {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+  }, [navigationState?.reason, requestedPlan, requestedTab]);
 
   useEffect(() => {
     const visitorId = getVisitorId();
@@ -196,7 +233,7 @@ export function Subscription() {
         </p>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue={initialTab} className="space-y-6">
         <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl bg-white p-1 shadow-sm">
           <TabsTrigger value="overview" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
           <TabsTrigger value="plans" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Plans</TabsTrigger>
@@ -237,7 +274,7 @@ export function Subscription() {
         {paymentPlans.map((plan) => (
           <Card
             key={plan.id}
-            className={`relative rounded-[2rem] border px-7 py-8 transition-all duration-300 ${
+            className={`relative rounded-[2rem] border px-6 py-7 transition-all duration-300 ${
               plan.popular
                 ? "scale-[1.02] border-[#6a6af1] bg-[#f8f7ff] shadow-[0_20px_60px_rgba(91,91,214,0.16)]"
                 : "border-[#6c72e8] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
@@ -246,7 +283,7 @@ export function Subscription() {
             {plan.popular && (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                 <span className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-lg shadow-accent/20">
-                  MOST POPULAR
+                  BEST VALUE
                 </span>
               </div>
             )}
@@ -254,7 +291,9 @@ export function Subscription() {
             <div className="space-y-4">
               <div>
                 <h3 className="text-2xl font-semibold text-slate-900">{plan.name}</h3>
-                <p className="mt-3 max-w-[96%] whitespace-nowrap text-[12px] leading-6 text-slate-500 xl:text-[13px]">{plan.description}</p>
+                <p className="mt-3 max-w-[96%] whitespace-normal text-[13px] leading-6 text-slate-500 xl:text-[14px]">
+                  {plan.description}
+                </p>
               </div>
 
               <div className="flex items-end gap-1">
@@ -301,6 +340,37 @@ export function Subscription() {
       <div className="rounded-2xl border border-dashed border-border/60 bg-white p-5 text-sm text-muted-foreground">
         Not ready to buy yet? You can always review the <Link to="/#pricing" className="text-accent underline">public pricing page</Link> or reach out to sales for the Pro plan.
       </div>
+
+      <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-primary">Billing FAQs</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Quick answers about payment, upgrades, and support.</p>
+          </div>
+        </div>
+
+        <Accordion
+          type="single"
+          collapsible
+          defaultValue="item-1"
+          className="mt-5 flex flex-col gap-3"
+        >
+          {billingFaqs.map((faq, index) => (
+            <AccordionItem
+              key={faq.question}
+              value={`item-${index + 1}`}
+              className="overflow-hidden rounded-[16px] border border-[#e1e4f3] bg-[#fbfbff]"
+            >
+              <AccordionTrigger className="px-4 py-4 text-left text-[15px] font-semibold text-primary no-underline hover:no-underline">
+                {faq.question}
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-4 text-sm leading-7 text-muted-foreground">
+                {faq.answer}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </Card>
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-6">

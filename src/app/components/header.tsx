@@ -116,14 +116,7 @@ export function Header() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <>
-                <Button
-                  variant="outline"
-                  className="hidden sm:flex"
-                  onClick={() => setAuthModalOpen(true)}
-                >
-                  Sign In
-                </Button>
+                <>                
                 <Button
                   onClick={() => setAuthModalOpen(true)}
                 >

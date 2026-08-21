@@ -137,7 +137,7 @@ export function FaqSection() {
 
         <p className="mt-8 text-center text-[16px] text-[#7b8a9f]">
           Still have questions?{" "}
-          <a href="#contact" className="font-semibold text-[#6f74ef] hover:underline">
+          <a href="/contact" className="font-semibold text-[#6f74ef] hover:underline">
             Contact our support team
           </a>
         </p>

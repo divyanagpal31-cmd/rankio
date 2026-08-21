@@ -10,6 +10,8 @@ import { ProfileSettings } from "./components/dashboard/profile-settings";
 import { ProtectedRoute } from "./components/protected-route";
 import { TermsOfUse } from "./components/terms-of-use";
 import { PrivacyPolicy } from "./components/privacy-policy";
+import { RefundPolicy } from "./components/refund-policy";
+import { ContactUs } from "./components/contact-us";
 import { PayPalSuccess } from "./components/paypal-success";
 import { PayPalCancel } from "./components/paypal-cancel";
 import { ScrollManager } from "./components/scroll-manager";
@@ -29,6 +31,14 @@ export const router = createBrowserRouter([
       {
         path: "/privacy",
         element: <PrivacyPolicy />,
+      },
+      {
+        path: "/refund-policy",
+        element: <RefundPolicy />,
+      },
+      {
+        path: "/contact",
+        element: <ContactUs />,
       },
       {
         path: "/report",

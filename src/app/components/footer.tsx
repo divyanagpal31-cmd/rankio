@@ -80,9 +80,9 @@ export function Footer({ variant = "landing", className, onNavigate }: FooterPro
                 </a>
               </li>
               <li>
-                <a href="mailto:support@rankio.ai" className="transition-colors hover:text-white">
-                  Contact
-                </a>
+                <Link to="/contact" className="transition-colors hover:text-white" onClick={handleNavigate("/contact")}>
+                  Contact Us
+                </Link>
               </li>
               <li>
                 <Link to="/privacy" className="transition-colors hover:text-white" onClick={handleNavigate("/privacy")}>
@@ -92,6 +92,15 @@ export function Footer({ variant = "landing", className, onNavigate }: FooterPro
               <li>
                 <Link to="/terms" className="transition-colors hover:text-white" onClick={handleNavigate("/terms")}>
                   Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/refund-policy"
+                  className="transition-colors hover:text-white"
+                  onClick={handleNavigate("/refund-policy")}
+                >
+                  Refund Policy
                 </Link>
               </li>
             </ul>

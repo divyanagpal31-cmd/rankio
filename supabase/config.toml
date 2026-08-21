@@ -3,6 +3,11 @@
 # The function uses the service role key internally to write to `leads`.
 verify_jwt = false
 
+[functions.contact-notify]
+# Allow unauthenticated users to submit the contact form.
+# The function uses the service role key internally to write to `contact_messages`.
+verify_jwt = false
+
 [functions.ensure-auth-user]
 # Allows first-time email OTP users to be created as already confirmed before the OTP email is sent.
 verify_jwt = false

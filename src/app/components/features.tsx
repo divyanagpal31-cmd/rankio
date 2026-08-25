@@ -11,7 +11,10 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 
+import { useAuth } from "../providers/auth-provider";
+import { AuthModal } from "./auth-modal";
 import { Button } from "./ui/button";
 import industriesPattern from "../../assets/IndustriesWeCover-Pattern.png";
 
@@ -30,6 +33,9 @@ type Industry = {
 };
 
 export function Features() {
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const { user } = useAuth();
+
   const industries: Industry[] = [
     {
       icon: Laptop,
@@ -160,7 +166,7 @@ export function Features() {
           </article>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
           {industries.map((industry) => {
             const Icon = industry.icon;
             return (
@@ -212,12 +218,25 @@ export function Features() {
         </div>
 
         <div className="mt-10 flex justify-center">
-          <Button size="lg" className="w-full sm:w-auto">
+          <Button
+            size="lg"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              if (user) {
+                window.location.href = "/pricing";
+                return;
+              }
+
+              setAuthModalOpen(true);
+            }}
+          >
             Analyze Your Industry
             <ArrowRight className="h-5 w-5" />
           </Button>
         </div>
       </div>
+
+      <AuthModal open={authModalOpen} onOpenChange={setAuthModalOpen} />
     </section>
   );
 }

@@ -13,6 +13,7 @@ import { getVisitorId } from "../../services/visitor-id";
 import { paymentPlans, type PaymentPlanId, type PayPalCheckoutPlanId } from "../../services/payment-plans";
 import { startPayPalCheckout } from "../../services/paypal-service";
 import { formatReadableDate } from "../../services/date-format";
+import { billingFaqs } from "../../data/faq-content";
 
 function getPlanFromSearch(search: string): PaymentPlanId | null {
   const value = new URLSearchParams(search).get("plan")?.trim() ?? "";
@@ -27,29 +28,6 @@ function getTabFromSearch(search: string): "overview" | "plans" | "billing" | "r
 function getReportIdFromSearch(search: string): string | null {
   return new URLSearchParams(search).get("reportId")?.trim() ?? null;
 }
-
-const billingFaqs = [
-  {
-    question: "When am I charged?",
-    answer:
-      "You’re charged when you complete checkout. Starter and Team Pack are one-time purchases, so there are no recurring subscription charges.",
-  },
-  {
-    question: "Can I upgrade later?",
-    answer:
-      "Yes. You can start with a smaller package and move to a larger plan when you need more report credits or additional team capacity.",
-  },
-  {
-    question: "Do unused reports expire?",
-    answer:
-      "Unused credits remain available according to your plan settings. Your billing history and credit usage section will show how many reports are still available.",
-  },
-  {
-    question: "How do I get help with billing?",
-    answer:
-      "Email the Rankio team at sales@rankio.ai and we’ll help with plan questions, payment issues, or account access.",
-  },
-];
 
 export function Subscription() {
   const { subscription } = useSubscription();

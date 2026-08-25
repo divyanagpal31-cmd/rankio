@@ -5,7 +5,6 @@ import { HeroSection } from "./hero-section";
 import { WhyRankioExists } from "./why-rankio-exists";
 import { Features } from "./features";
 import { WhyAiVisibilityMatters } from "./why-ai-visibility-matters";
-import { PerformanceSection } from "./performance-section";
 import { HowItWorks } from "./how-it-works";
 import { SampleReport } from "./sample-report";
 import { Pricing } from "./pricing";
@@ -42,7 +41,6 @@ export function LandingPage() {
         <WhyRankioExists />
         <Features />
         <WhyAiVisibilityMatters />
-        <PerformanceSection />
         <HowItWorks />
         <SampleReport />
         <Pricing />

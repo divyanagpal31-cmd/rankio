@@ -10,12 +10,13 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { LayoutDashboard, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Menu, Settings, LogOut, X } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useAuth } from "../providers/auth-provider";
 
 export function Header() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
 
@@ -62,7 +63,17 @@ export function Header() {
             </nav>
 
             {/* CTA / User Profile */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                aria-expanded={mobileMenuOpen}
+                onClick={() => setMobileMenuOpen((open) => !open)}
+                className="lg:hidden"
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
               {user ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -126,6 +137,30 @@ export function Header() {
               )}
             </div>
           </div>
+          {mobileMenuOpen && (
+            <nav className="border-t border-slate-100 py-3 lg:hidden">
+              <div className="flex flex-col gap-1">
+                {[
+                  ["Platform", "#why-rankio-exists"],
+                  ["Solutions", "#features"],
+                  ["How it Works", "#how-it-works"],
+                  ["Sample Report", "#sample-report"],
+                  ["Pricing", "#pricing"],
+                  ["Why Rankio", "#why-rankio"],
+                  ["FAQs", "#faq"],
+                ].map(([label, href]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-primary"
+                  >
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </nav>
+          )}
         </div>
       </header>
 

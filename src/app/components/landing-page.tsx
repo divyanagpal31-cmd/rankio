@@ -34,13 +34,13 @@ export function LandingPage() {
   }, [location.hash]);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="landing-page min-h-screen bg-white">
       <Header />
       <main>
         <HeroSection />
-        <WhyRankioExists />
-        <Features />
         <WhyAiVisibilityMatters />
+        <Features />
+        <WhyRankioExists />
         <HowItWorks />
         <SampleReport />
         <Pricing />

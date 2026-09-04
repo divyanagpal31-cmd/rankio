@@ -4,7 +4,7 @@ This folder stores the three report design references shared by the user.
 
 ## Files
 - `report-page-1.jpeg` — detailed AI audit layout
-- `report-page-2.jpeg` — strategic AI readiness roadmap layout
+- `report-page-2.jpeg` — strategic AI visibility roadmap layout
 - `report-page-3.jpeg` — executive summary layout
 
 ## Purpose

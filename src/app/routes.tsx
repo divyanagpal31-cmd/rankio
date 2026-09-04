@@ -7,6 +7,7 @@ import { MyWebsites } from "./components/dashboard/my-websites";
 import { ReportComparisonPage } from "./components/dashboard/report-comparison-page";
 import { Subscription } from "./components/dashboard/subscription";
 import { ProfileSettings } from "./components/dashboard/profile-settings";
+import { Integrations } from "./components/dashboard/integrations";
 import { ProtectedRoute } from "./components/protected-route";
 import { TermsOfUse } from "./components/terms-of-use";
 import { PrivacyPolicy } from "./components/privacy-policy";
@@ -79,6 +80,10 @@ export const router = createBrowserRouter([
           {
             path: "settings",
             element: <ProfileSettings />,
+          },
+          {
+            path: "integrations",
+            element: <Integrations />,
           },
         ],
       },

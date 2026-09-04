@@ -71,7 +71,7 @@ export function Features() {
         { icon: MessageSquareText, label: "Content Structure" },
         { icon: FileText, label: "Internal Linking" },
         { icon: Sparkles, label: "Topic Authority" },
-        { icon: Tags, label: "AI Citation Readiness" },
+        { icon: Tags, label: "AI Citation Visibility" },
       ],
       statLabel: "Boost in organic visibility",
       statValue: "+52%",
@@ -115,8 +115,8 @@ export function Features() {
           </div>
 
           <article className="group relative rounded-[16px] border border-[#6c72e8] bg-[rgba(255,255,255,0.78)] p-5 shadow-[0_14px_32px_rgba(89,95,201,0.18)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_44px_rgba(89,95,201,0.24)] xl:col-span-2">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#6c72e8] bg-white text-[#5259c7]">
+            <div className="flex flex-col items-start gap-4 sm:flex-row">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#6c72e8] bg-white text-[#5259c7]">
                 <ShoppingCart className="h-7 w-7" />
               </div>
               <div className="min-w-0 flex-1">
@@ -152,7 +152,7 @@ export function Features() {
                     );
                   })}
                 </div>
-                <div className="mt-5 border-t border-[#d9ddf6] pt-4">
+                {/*<div className="mt-5 border-t border-[#d9ddf6] pt-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-[13px] text-[#6f7f95]">
                       <span className="h-2 w-2 rounded-full bg-[#15c16a]" />
@@ -160,7 +160,7 @@ export function Features() {
                     </div>
                     <span className="text-[18px] font-bold text-accent">+40%</span>
                   </div>
-                </div>
+                </div>*/}
               </div>
             </div>
           </article>
@@ -174,8 +174,8 @@ export function Features() {
                 key={industry.title}
                 className="group min-h-[180px] rounded-[16px] border border-[#6c72e8] bg-[rgba(255,255,255,0.76)] p-5 shadow-[0_14px_32px_rgba(89,95,201,0.14)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_44px_rgba(89,95,201,0.2)] sm:min-h-[210px]"
               >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#6c72e8] bg-white text-[#5259c7]">
+                <div className="flex flex-col items-start gap-3 sm:flex-row">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#6c72e8] bg-white text-[#5259c7]">
                     <Icon className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -203,7 +203,7 @@ export function Features() {
                   </div>
                 </div>
 
-                <div className="mt-7 border-t border-[#d9ddf6] pt-4">
+                {/* <div className="mt-7 border-t border-[#d9ddf6] pt-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-[13px] text-[#6f7f95]">
                       <span className="h-2 w-2 rounded-full bg-[#15c16a]" />
@@ -211,7 +211,7 @@ export function Features() {
                     </div>
                     <span className="text-[18px] font-bold text-accent">{industry.statValue}</span>
                   </div>
-                </div>
+                </div> */}
               </article>
             );
           })}

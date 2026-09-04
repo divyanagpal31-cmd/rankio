@@ -92,8 +92,43 @@
   }
 }
 
+@media (max-width: 639px) {
+  .landing-page section {
+    padding-top: 3rem !important;
+    padding-bottom: 3rem !important;
+  }
+
+  .landing-page section .mt-14 {
+    margin-top: 2rem;
+  }
+
+  .landing-page section .mt-16 {
+    margin-top: 2.5rem;
+  }
+
+  .landing-page section .mb-14 {
+    margin-bottom: 2rem;
+  }
+
+  .landing-page section .mb-12 {
+    margin-bottom: 1.75rem;
+  }
+
+  .landing-page section .text-center {
+    text-align: left;
+  }
+}
+
 .report-print-cover {
   display: none;
+}
+
+.landing-page h2 {
+  line-height: 1.2;
+}
+
+.landing-page h3 {
+  line-height: 1.45;
 }
 
 @media print {

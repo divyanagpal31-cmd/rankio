@@ -45,29 +45,29 @@ export function FaqSection() {
             FAQs
           </h2>
           <p className="mt-4 text-[18px] leading-7 text-[#7b8a9f]">
-            Everything you need to know about AI readiness and Rankio
+            Everything you need to know about AI visibility and Rankio
           </p>
         </div>
 
         <Tabs defaultValue="general" className="mx-auto max-w-[860px]">
-          <TabsList className="mb-6 grid h-auto w-full grid-cols-1 gap-2 rounded-xl border border-[#dde2fb] bg-[linear-gradient(180deg,#f7f8ff_0%,#eef1ff_100%)] p-1 shadow-[0_12px_30px_rgba(91,95,214,0.08)] sm:grid-cols-3">
+          <TabsList className="mb-6 grid h-auto w-full grid-cols-3 gap-1 rounded-xl border border-[#dde2fb] bg-[linear-gradient(180deg,#f7f8ff_0%,#eef1ff_100%)] p-1 shadow-[0_12px_30px_rgba(91,95,214,0.08)] sm:gap-2">
             <TabsTrigger
               value="general"
-              className="rounded-md border border-transparent px-4 py-2 text-[14px] font-semibold text-[#5e6b84] transition-all duration-200 data-[state=active]:border-[#5d67dc] data-[state=active]:bg-[#5d67dc] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(91,95,214,0.28)]"
+              className="rounded-md border border-transparent px-1 py-2 text-[12px] font-semibold whitespace-nowrap text-[#5e6b84] transition-all duration-200 sm:px-4 sm:text-[14px] data-[state=active]:border-[#5d67dc] data-[state=active]:bg-[#5d67dc] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(91,95,214,0.28)]"
             >
-              General FAQs
+              General
             </TabsTrigger>
             <TabsTrigger
               value="billing"
-              className="rounded-md border border-transparent px-4 py-2 text-[14px] font-semibold text-[#5e6b84] transition-all duration-200 data-[state=active]:border-[#5d67dc] data-[state=active]:bg-[#5d67dc] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(91,95,214,0.28)]"
+              className="rounded-md border border-transparent px-1 py-2 text-[12px] font-semibold whitespace-nowrap text-[#5e6b84] transition-all duration-200 sm:px-4 sm:text-[14px] data-[state=active]:border-[#5d67dc] data-[state=active]:bg-[#5d67dc] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(91,95,214,0.28)]"
             >
-              Billing FAQs
+              Billing
             </TabsTrigger>
             <TabsTrigger
               value="technical"
-              className="rounded-md border border-transparent px-4 py-2 text-[14px] font-semibold text-[#5e6b84] transition-all duration-200 data-[state=active]:border-[#5d67dc] data-[state=active]:bg-[#5d67dc] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(91,95,214,0.28)]"
+              className="rounded-md border border-transparent px-1 py-2 text-[12px] font-semibold whitespace-nowrap text-[#5e6b84] transition-all duration-200 sm:px-4 sm:text-[14px] data-[state=active]:border-[#5d67dc] data-[state=active]:bg-[#5d67dc] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_24px_rgba(91,95,214,0.28)]"
             >
-              Technical FAQs
+              Technical
             </TabsTrigger>
           </TabsList>
 

@@ -12,7 +12,7 @@ export const generalFaqs = [
   {
     question: "How is Rankio different from traditional SEO tools?",
     answer:
-      "Traditional SEO tools primarily focus on rankings, keywords, backlinks, and technical SEO. Rankio goes further by evaluating signals related to AI visibility, content understanding, structured data, brand clarity, and citation readiness alongside important technical foundations.",
+      "Traditional SEO tools primarily focus on rankings, keywords, backlinks, and technical SEO. Rankio goes further by evaluating signals related to AI visibility, content understanding, structured data, brand clarity, and citation visibility alongside important technical foundations.",
   },
   {
     question: "Who is Rankio for?",
@@ -58,7 +58,7 @@ export const technicalFaqs = [
   {
     question: "What does Rankio analyze?",
     answer:
-      "Rankio evaluates multiple aspects of your website, including accessibility, technical foundations, website structure, metadata, structured data, content clarity, brand understanding, AI visibility, and citation readiness. The exact analysis may vary based on your website type and available information.",
+      "Rankio evaluates multiple aspects of your website, including accessibility, technical foundations, website structure, metadata, structured data, content clarity, brand understanding, AI visibility, and citation visibility. The exact analysis may vary based on your website type and available information.",
   },
   {
     question: "Does Rankio check website speed and mobile compatibility?",

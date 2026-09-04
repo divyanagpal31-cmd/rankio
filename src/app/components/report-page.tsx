@@ -141,7 +141,7 @@ type VerticalProfile = {
 };
 
 const fallbackReportSummary =
-  "This report identifies the highest-impact improvements across AI search visibility, structured data, content clarity, and technical readiness.";
+  "This report identifies the highest-impact improvements across AI search visibility, structured data, content clarity, and technical visibility.";
 
 function clampScore(value: number | null | undefined, fallback = 0) {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
@@ -203,9 +203,9 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         key: vertical,
         label: "E-Commerce",
         audience: "E-Commerce Teams",
-        summaryTitle: "AI Readiness Executive Overview",
+        summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
-          "Your store’s product pages, category structure, and offer markup determine how well AI assistants can recommend your products.",
+          "Your storeâ€™s product pages, category structure, and offer markup determine how well AI assistants can recommend your products.",
         summaryBody:
           "This report highlights the signals that influence shopping intent, product discovery, and answer engine citations for retail and catalog sites.",
         categoryCopy: {
@@ -230,14 +230,14 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         key: vertical,
         label: "SaaS",
         audience: "SaaS Teams",
-        summaryTitle: "AI Readiness Executive Overview",
+        summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
           "Your product pages, docs, and feature explanations determine how well AI systems understand your offer and recommend it in tool comparisons.",
         summaryBody:
           "This report emphasizes pricing pages, docs, feature clarity, and trust signals that matter for software evaluation and acquisition intent.",
         categoryCopy: {
           seo: "Feature pages, docs crawlability, and pricing discoverability.",
-          ai: "Feature entities, use cases, and comparison readiness.",
+          ai: "Feature entities, use cases, and comparison visibility.",
           ux: "Demo funnels, navigation, and value-prop clarity.",
           tech: "App shell performance and documentation delivery.",
         },
@@ -257,7 +257,7 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         key: vertical,
         label: "Local Business",
         audience: "Local Growth Teams",
-        summaryTitle: "AI Readiness Executive Overview",
+        summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
           "Your location pages, service coverage, and trust signals determine how well AI systems surface you for nearby and service-intent queries.",
         summaryBody:
@@ -284,14 +284,14 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         key: vertical,
         label: "Content / Media",
         audience: "Content Teams",
-        summaryTitle: "AI Readiness Executive Overview",
+        summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
           "Your article structure, entity depth, and internal linking determine how easily AI systems can quote and summarize your work.",
         summaryBody:
-          "This report emphasizes editorial clarity, topic authority, and citation readiness for blogs, publications, and resource libraries.",
+          "This report emphasizes editorial clarity, topic authority, and citation visibility for blogs, publications, and resource libraries.",
         categoryCopy: {
           seo: "Topic hubs, article crawlability, and editorial discoverability.",
-          ai: "Topic entities, answer depth, and citation readiness.",
+          ai: "Topic entities, answer depth, and citation visibility.",
           ux: "Readability, structure, and article navigation.",
           tech: "Media delivery, page speed, and archive performance.",
         },
@@ -311,14 +311,14 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         key: vertical,
         label: "Website",
         audience: "Executive Board",
-        summaryTitle: "AI Readiness Executive Overview",
+        summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
-          "Your site’s structure, content clarity, and technical delivery determine how well AI systems can understand and recommend it.",
+          "Your siteâ€™s structure, content clarity, and technical delivery determine how well AI systems can understand and recommend it.",
         summaryBody:
           "This report highlights the most important improvements across discovery, interpretability, and technical reliability.",
         categoryCopy: {
           seo: "Search crawlability, indexability, and metadata consistency.",
-          ai: "LLM retrieval signals, citation readiness, and answerability.",
+          ai: "LLM retrieval signals, citation visibility, and answerability.",
           ux: "Information hierarchy, accessibility, and conversion clarity.",
           tech: "Speed, stability, and bot-friendly delivery quality.",
         },
@@ -327,7 +327,7 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         semanticFocus: "Concept and entity relationships",
         uxFocus: "Hierarchy and accessibility",
         techFocus: "Speed and delivery quality",
-        roadmapTitle: "Strategic AI Readiness Roadmap",
+        roadmapTitle: "Strategic AI Visibility Roadmap",
         roadmapLead: "Focused improvements that move the site toward stronger AI visibility and answerability.",
         roadmapSummary:
           "Prioritize the issues that most directly influence how AI systems crawl, interpret, and cite your pages.",
@@ -358,7 +358,7 @@ function maturityDescription(score: number) {
   if (score >= 86) return "Your website is well-prepared for AI visibility and answer engines.";
   if (score >= 71) return "Your website is in a strong position, with a few improvements left to make.";
   if (score >= 56) return "Your website is making progress, but still needs important improvements.";
-  return "Your website is at an early stage and needs foundational AI-readiness improvements.";
+  return "Your website is at an early stage and needs foundational AI-visibility improvements.";
 }
 
 function maturityShortDescription(label: string) {
@@ -567,7 +567,7 @@ function issueImpact(severity: string, bucket: string) {
   if (severity === "Critical" || severity === "High") {
     return bucket === "technical-performance"
       ? "Can block crawl reliability, rendering quality, and user trust."
-      : "Likely suppresses AI confidence, citation readiness, or conversion clarity.";
+      : "Likely suppresses AI confidence, citation visibility, or conversion clarity.";
   }
 
   if (severity === "Medium") {
@@ -698,10 +698,10 @@ function writeReportCache(reportId: string, value: unknown) {
 
 function normalizePdfText(value: unknown) {
   return String(value ?? "")
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[–—]/g, "-")
-    .replace(/•/g, "-")
+    .replace(/[â€œâ€]/g, '"')
+    .replace(/[â€˜â€™]/g, "'")
+    .replace(/[â€“â€”]/g, "-")
+    .replace(/â€¢/g, "-")
     .replace(/\s+/g, " ")
     .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
     .trim();
@@ -1171,6 +1171,10 @@ export function ReportPage() {
   const [reportById, setReportById] = useState<any | null | undefined>(undefined);
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [searchConsoleSnapshot, setSearchConsoleSnapshot] = useState<any | null>(null);
+  const [searchConsoleLoading, setSearchConsoleLoading] = useState(false);
+  const [ga4Snapshot, setGa4Snapshot] = useState<any | null>(null);
+  const [ga4Loading, setGa4Loading] = useState(false);
   const [activeSection, setActiveSection] = useState("executive-summary");
   const reportFromState = (location.state as any)?.report as any | undefined;
   const backTo = (location.state as any)?.from as string | undefined;
@@ -1379,6 +1383,48 @@ export function ReportPage() {
     (user?.email ? user.email.slice(0, 2).toUpperCase() : "U");
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadVerifiedSignals = async () => {
+      if (!user || !display) {
+        setSearchConsoleSnapshot(null);
+        setSearchConsoleLoading(false);
+        setGa4Snapshot(null);
+        setGa4Loading(false);
+        return;
+      }
+
+      setSearchConsoleLoading(true);
+      setGa4Loading(true);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const [searchConsoleResult, ga4Result] = await Promise.all([
+        supabase.functions.invoke("search-console", {
+          body: { action: "snapshot", provider: "google_search_console", website_url: display },
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        }),
+        supabase.functions.invoke("google-analytics", {
+          body: { action: "snapshot", provider: "google_analytics" },
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        }),
+      ]);
+
+      if (cancelled) return;
+
+      setSearchConsoleSnapshot((searchConsoleResult.data as any)?.snapshot ?? null);
+      setGa4Snapshot((ga4Result.data as any)?.snapshot ?? null);
+      setSearchConsoleLoading(false);
+      setGa4Loading(false);
+    };
+
+    void loadVerifiedSignals();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [display, user, activeReport?.id]);
+
+  useEffect(() => {
     if (!shouldShowUpgradePrompt) return;
 
     const promptKey = `${String(activeReport?.id ?? reportId ?? "latest")}:${upgradePromptType}`;
@@ -1566,7 +1612,7 @@ export function ReportPage() {
       icon: Search,
     },
     {
-      label: "AI Readiness",
+      label: "AI Visibility",
       score: overallScore,
       description: verticalProfile.categoryCopy.ai,
       tone: "violet",
@@ -1659,9 +1705,9 @@ export function ReportPage() {
     const h1Consistency = crawlerPages.length > 0 ? pagesWithH1 / crawlerPages.length : null;
     const schemaTypes = Array.from(new Set(crawlerPages.flatMap((page) => safeArray<string>(page?.schemaTypes))));
     const firstBrokenLink = crawlerBrokenLinks[0];
-    const citationReadiness = clampScore((scoreBreakdownPayload?.citation_readiness ?? scoreBreakdownPayload?.citationReadiness ?? overallScore) as number, overallScore);
-    const technicalReadiness = clampScore((scoreBreakdownPayload?.technical_readiness ?? scoreBreakdownPayload?.technicalReadiness ?? technicalScore) as number, technicalScore);
-    const contentReadiness = clampScore((scoreBreakdownPayload?.content_readiness ?? scoreBreakdownPayload?.contentReadiness ?? overallScore) as number, overallScore);
+    const citationVisibility = clampScore((scoreBreakdownPayload?.citation_visibility ?? scoreBreakdownPayload?.citationVisibility ?? overallScore) as number, overallScore);
+    const technicalVisibility = clampScore((scoreBreakdownPayload?.technical_visibility ?? scoreBreakdownPayload?.technicalVisibility ?? technicalScore) as number, technicalScore);
+    const contentVisibility = clampScore((scoreBreakdownPayload?.content_visibility ?? scoreBreakdownPayload?.contentVisibility ?? overallScore) as number, overallScore);
     const aiUnderstanding = clampScore((scoreBreakdownPayload?.ai_understanding ?? scoreBreakdownPayload?.aiUnderstanding ?? overallScore) as number, overallScore);
     const overallSnapshot = clampScore((scoreBreakdownPayload?.overall_score ?? scoreBreakdownPayload?.overallScore ?? overallScore) as number, overallScore);
     const entityConfidence = clampScore(entityEnrichment?.confidence ?? 0, 0);
@@ -1675,12 +1721,12 @@ export function ReportPage() {
         eyebrow: "AEO / GEO",
         title: "AI Search Visibility",
         description: `How well AI systems can retrieve, trust, and cite the site's core answers.`,
-        score: clampScore(Math.max(overallSnapshot, citationReadiness)),
-        scoreLabel: "Citation Readiness",
+        score: clampScore(Math.max(overallSnapshot, citationVisibility)),
+        scoreLabel: "Citation Visibility",
         tiles: [
           {
-            label: "Citation Readiness",
-            value: formatPercent(citationReadiness),
+            label: "Citation Visibility",
+            value: formatPercent(citationVisibility),
             detail:
               firstAiIssue?.suggestion ??
               `Pages with clear structure, schema, and answer-ready content are easier for AI systems to cite.`,
@@ -1701,8 +1747,8 @@ export function ReportPage() {
         eyebrow: "Semantic density",
         title: "Content Intelligence",
         description: `Entity mapping, content clarity, and language structure for ${verticalProfile.contentFocus.toLowerCase()}.`,
-        score: clampScore(contentReadiness, overallScore),
-        scoreLabel: "Content Readiness",
+        score: clampScore(contentVisibility, overallScore),
+        scoreLabel: "Content Visibility",
         tiles: [
           {
             label: "Titles / Meta",
@@ -1738,8 +1784,8 @@ export function ReportPage() {
         eyebrow: "Schema coverage",
         title: "Structured Data",
         description: `Markup depth, schema completeness, and alternate-language coverage for ${verticalProfile.structuredFocus.toLowerCase()}.`,
-        score: clampScore(Math.max(technicalReadiness, seoScore || 0)),
-        scoreLabel: "Schema Readiness",
+        score: clampScore(Math.max(technicalVisibility, seoScore || 0)),
+        scoreLabel: "Schema Visibility",
         tiles: [
           {
             label: "Schema Pages",
@@ -1780,7 +1826,7 @@ export function ReportPage() {
         eyebrow: "Knowledge graph",
         title: "Semantic Health",
         description: `How well the site exposes entities and relationships AI systems need for ${verticalProfile.semanticFocus.toLowerCase()}.`,
-        score: clampScore((aiUnderstanding + citationReadiness) / 2, overallScore),
+        score: clampScore((aiUnderstanding + citationVisibility) / 2, overallScore),
         scoreLabel: "Semantic Coverage",
         tiles: [
           {
@@ -1857,7 +1903,7 @@ export function ReportPage() {
         eyebrow: "Speed + render path",
         title: "Technical Performance",
         description: `Speed, efficiency, and bot rendering quality for ${verticalProfile.techFocus.toLowerCase()}.`,
-        score: clampScore(Math.max(performanceScore || technicalScore || 75, technicalReadiness), 75),
+        score: clampScore(Math.max(performanceScore || technicalScore || 75, technicalVisibility), 75),
         scoreLabel: "Core Web Vitals",
         tiles: [
           {
@@ -1879,7 +1925,7 @@ export function ReportPage() {
           },
           {
             label: "Robots / Sitemap",
-            value: `${rawScanData?.crawler?.robotsTxt ? "robots" : "no robots"} · ${rawScanData?.crawler?.sitemapUrls?.length ? "sitemap" : "no sitemap"}`,
+            value: `${rawScanData?.crawler?.robotsTxt ? "robots" : "no robots"} Â· ${rawScanData?.crawler?.sitemapUrls?.length ? "sitemap" : "no sitemap"}`,
             detail: `Crawl instructions and sitemap hints shape how quickly AI and search crawlers discover the site.`,
             tone: "sky",
           },
@@ -1896,7 +1942,7 @@ export function ReportPage() {
         eyebrow: "Legacy discoverability",
         title: "SEO Foundation",
         description: `Traditional search engine trust signals that still matter for AI-assisted discovery in ${verticalProfile.label.toLowerCase()} niches.`,
-        score: clampScore(Math.max(seoScore, technicalReadiness), 68),
+        score: clampScore(Math.max(seoScore, technicalVisibility), 68),
         scoreLabel: "Search Signals",
         tiles: [
           {
@@ -2006,7 +2052,7 @@ export function ReportPage() {
     return [
       {
         title: "Quick Wins",
-        phase: "Phase 1 · Deployment (1-3 Days)",
+        phase: "Phase 1 Â· Deployment (1-3 Days)",
         summary: "Small changes that create immediate gains in retrieval confidence and page clarity.",
         icon: Rocket,
         items:
@@ -2017,7 +2063,7 @@ export function ReportPage() {
       },
       {
         title: "Medium Improvements",
-        phase: "Phase 2 · Integration (1-2 Weeks)",
+        phase: "Phase 2 Â· Integration (1-2 Weeks)",
         summary: "Structural changes that improve how AI systems interpret your brand and content at scale.",
         icon: Layers3,
         items:
@@ -2028,7 +2074,7 @@ export function ReportPage() {
       },
       {
         title: "Advanced Optimization",
-        phase: "Phase 3 · Scaling (1 Month)",
+        phase: "Phase 3 Â· Scaling (1 Month)",
         summary: "More strategic work that compounds AI visibility gains over time.",
         icon: Sparkles,
         items:
@@ -2039,7 +2085,7 @@ export function ReportPage() {
       },
       {
         title: "Long-term Authority",
-        phase: "Phase 4 · Evolution (Ongoing)",
+        phase: "Phase 4 Â· Evolution (Ongoing)",
         summary: "A durable operating system for AI visibility, citation frequency, and brand trust.",
         icon: TrendingUp,
         items: longTermSignals,
@@ -2149,10 +2195,17 @@ export function ReportPage() {
   }
 
 
+  const searchConsoleSummary = searchConsoleSnapshot
+    ? ` Search Console adds ${searchConsoleSnapshot.totalImpressions.toLocaleString()} impressions and ${searchConsoleSnapshot.queryCount} tracked queries over the last 28 days.`
+    : "";
+  const ga4Summary = ga4Snapshot
+    ? ` GA4 adds ${ga4Snapshot.totalActiveUsers.toLocaleString()} active users and ${ga4Snapshot.totalSessions.toLocaleString()} sessions over the last 28 days.`
+    : "";
+
   const summaryText =
     isGuest
       ? needsCreditTopUp
-        ? "You’ve used all the report credits included in your current plan. This scan is still available in preview mode, but the full AI audit stays locked until you purchase more credits."
+        ? "Youâ€™ve used all the report credits included in your current plan. This scan is still available in preview mode, but the full AI audit stays locked until you purchase more credits."
         : needsPlanPurchase
           ? "You don't have an active plan right now. This scan is available in preview mode, and you can purchase a plan to unlock the full AI audit, recommendations, and roadmap."
           : "Log in and purchase any plan to unlock the full AI audit, recommendations, and roadmap."
@@ -2162,7 +2215,7 @@ export function ReportPage() {
           rawScanData?.summary ??
           verticalProfile.summaryBody ??
           fallbackReportSummary
-        }`;
+        }${searchConsoleSummary}${ga4Summary}`;
 
   const projectLabel = String(rawScanData?.rankio?.vertical ?? rawScanData?.industry ?? rawScanData?.vertical ?? verticalProfile.label);
   const reportStatusLabel = isGuest ? "Preview Report" : (activeReport as any)?.report_level === "full" ? "Full Report" : "Report";
@@ -2599,7 +2652,7 @@ export function ReportPage() {
                       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
                         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Projected Score</p>
                         <p className="mt-2 text-sm leading-6 text-white/72">
-                          Your estimated AI-readiness score out of 100 based on structure, content clarity, and technical quality.
+                          Your estimated AI-visibility score out of 100 based on structure, content clarity, and technical quality.
                         </p>
                       </div>
                       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
@@ -2762,6 +2815,116 @@ export function ReportPage() {
                   })}
                 </div>
 
+                {!isGuest ? (
+                  <div className="mt-6 rounded-[18px] border border-white/10 bg-white/5 p-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Search Console</p>
+                        <h3 className="mt-2 text-[20px] font-semibold text-white">Verified query data</h3>
+                      </div>
+                      {searchConsoleLoading ? <p className="text-sm text-white/45">Loading...</p> : null}
+                    </div>
+
+                    {searchConsoleSnapshot ? (
+                      <div className="mt-5 grid gap-4 md:grid-cols-3">
+                        <div className="rounded-xl border border-white/10 bg-black/15 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-white/45">Impressions</p>
+                          <p className="mt-2 text-2xl font-semibold text-white">
+                            {searchConsoleSnapshot.totalImpressions.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-black/15 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-white/45">Clicks</p>
+                          <p className="mt-2 text-2xl font-semibold text-white">
+                            {searchConsoleSnapshot.totalClicks.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-black/15 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-white/45">Avg. Position</p>
+                          <p className="mt-2 text-2xl font-semibold text-white">
+                            {searchConsoleSnapshot.averagePosition ? searchConsoleSnapshot.averagePosition.toFixed(1) : "â€”"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-white/55">
+                        Connect Search Console in dashboard integrations to show real query and landing-page performance here.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
+                {!isGuest ? (
+                  <div className="mt-6 rounded-[18px] border border-white/10 bg-white/5 p-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Google Analytics 4</p>
+                        <h3 className="mt-2 text-[20px] font-semibold text-white">Verified engagement data</h3>
+                      </div>
+                      {ga4Loading ? <p className="text-sm text-white/45">Loading...</p> : null}
+                    </div>
+
+                    {ga4Snapshot ? (
+                      <div className="mt-5 space-y-4">
+                        <div className="grid gap-4 md:grid-cols-4">
+                          <div className="rounded-xl border border-white/10 bg-black/15 p-4">
+                            <p className="text-xs uppercase tracking-[0.16em] text-white/45">Active Users</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">
+                              {ga4Snapshot.totalActiveUsers.toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-black/15 p-4">
+                            <p className="text-xs uppercase tracking-[0.16em] text-white/45">Sessions</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">
+                              {ga4Snapshot.totalSessions.toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-black/15 p-4">
+                            <p className="text-xs uppercase tracking-[0.16em] text-white/45">Engagement Rate</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">
+                              {ga4Snapshot.engagementRate ? `${ga4Snapshot.engagementRate.toFixed(1)}%` : "—"}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-black/15 p-4">
+                            <p className="text-xs uppercase tracking-[0.16em] text-white/45">New Users</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">
+                              {ga4Snapshot.totalNewUsers.toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        {ga4Snapshot.topPages?.length ? (
+                          <div className="rounded-xl border border-white/10 bg-black/10 p-4">
+                            <p className="text-xs uppercase tracking-[0.16em] text-white/45">Top landing pages</p>
+                            <div className="mt-3 space-y-3">
+                              {ga4Snapshot.topPages.slice(0, 3).map((page: any) => (
+                                <div key={page.page} className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-white">{page.page}</p>
+                                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-white/40">
+                                      {page.activeUsers.toLocaleString()} users · {page.sessions.toLocaleString()} sessions
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm font-semibold text-white">{page.pageViews.toLocaleString()} views</p>
+                                    <p className="text-xs uppercase tracking-[0.16em] text-white/40">
+                                      {page.engagementRate ? `${page.engagementRate.toFixed(1)}% engagement` : "No engagement data"}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-white/55">
+                        Connect Google Analytics in dashboard integrations to show verified audience and engagement data here.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+
                 <div className="mt-10">
                   <div className="flex items-center gap-3">
                     <AlertTriangle className="h-5 w-5 text-[#ffb5c7]" />
@@ -2813,7 +2976,7 @@ export function ReportPage() {
               <section id="ai-audit" className="report-section space-y-4">
                 <div className="flex items-center gap-3">
                   <h2 className="text-[26px] font-semibold tracking-tight text-white md:text-[34px]">
-                    Detailed AI Audit · {verticalProfile.label}
+                    Detailed AI Audit Â· {verticalProfile.label}
                   </h2>
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/45">
                     {reportStatusLabel}
@@ -2935,7 +3098,7 @@ export function ReportPage() {
                       {verticalProfile.roadmapTitle}
                     </h2>
                     <p className="mt-4 max-w-2xl text-[15px] leading-7 text-white/55 md:text-[16px]">
-                      Based on the current scan, we’ve identified a clear path to dominate the AI search ecosystem and
+                      Based on the current scan, weâ€™ve identified a clear path to dominate the AI search ecosystem and
                       move your site from traditional SEO into AI-native authority.
                     </p>
                   </div>
@@ -3181,6 +3344,8 @@ export function ReportPage() {
     </>
   );
 }
+
+
 
 
 

@@ -126,7 +126,7 @@ export function TermsOfUse() {
           <li>Structured-data analysis</li>
           <li>Content understanding insights</li>
           <li>Brand understanding insights</li>
-          <li>AI citation-readiness observations</li>
+          <li>AI citation-visibility observations</li>
           <li>Prioritized recommendations</li>
           <li>Action plans</li>
         </ul>

@@ -1,34 +1,34 @@
-import { CalendarDays, Cloud, ChartSpline, Target } from "lucide-react";
+import { BrainCircuit, Building2, FileText, ListChecks, ShieldCheck, Zap } from "lucide-react";
 
 export function WhyRankio() {
   const features = [
     {
-      icon: Cloud,
+      icon: BrainCircuit,
       title: "AI-First Analysis",
       description: "Built specifically for AI-powered search and answer engines—not just traditional SEO.",
     },
     {
-      icon: ChartSpline,
+      icon: Building2,
       title: "Industry-Specific Reports",
       description: "Every report adapts to your business type and website goals.",
     },
     {
-      icon: CalendarDays,
+      icon: ListChecks,
       title: "Actionable Recommendations",
       description: "Prioritized improvements with clear explanations and business impact.",
     },
     {
-      icon: Target,
+      icon: FileText,
       title: "Professional Reports",
       description: "Download and share beautifully designed PDF reports with your team or clients.",
     },
     {
-      icon: ChartSpline,
+      icon: Zap,
       title: "Fast & Easy",
       description: "Analyze your website in minutes without complex setup or integrations.",
     },
     {
-      icon: CalendarDays,
+      icon: ShieldCheck,
       title: "Privacy Focused",
       description: "Your website is analyzed securely. No code installation or website changes are required.",
     },
@@ -38,7 +38,7 @@ export function WhyRankio() {
     { feature: "Technical SEO", traditional: true, rankio: true },
     { feature: "AI Visibility Analysis", traditional: false, rankio: true },
     { feature: "Industry-Specific Scoring", traditional: false, rankio: true },
-    { feature: "AI Citation Readiness", traditional: false, rankio: true },
+    { feature: "AI Citation Visibility", traditional: false, rankio: true },
     { feature: "Action Plan", traditional: "Limited", rankio: true },
     { feature: "Downloadable Report", traditional: "Varies", rankio: true },
   ];
@@ -66,8 +66,8 @@ export function WhyRankio() {
                 key={feature.title}
                 className="group flex min-h-[200px] flex-col rounded-[14px] border border-[#5d67dc] bg-[#fbfbff] p-6 shadow-none transition-all duration-300 hover:-translate-y-1 hover:border-[#4f59d8] hover:bg-white hover:shadow-[0_20px_44px_rgba(89,95,201,0.18)] sm:min-h-[240px]"
               >
-                <div className="flex h-12 w-12 items-center justify-center text-[#5b63d8] transition-transform duration-300 group-hover:scale-105">
-                  <Icon className="h-12 w-12 stroke-[1.6]" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#6c72e8] bg-white text-[#5b63d8] transition-transform duration-300 group-hover:scale-105">
+                  <Icon className="h-8 w-8 stroke-[1.5]" />
                 </div>
                 <h3 className="mt-7 text-[18px] font-semibold leading-[1.4] text-[#232c41]">
                   {feature.title}
@@ -85,9 +85,10 @@ export function WhyRankio() {
             <div className="mx-auto mb-14 max-w-3xl text-center">
               <h2 className="mt-4 text-[28px] font-bold tracking-tight text-slate-900 sm:text-3xl md:text-5xl">
               <span className="bg-gradient-to-r from-[#5d67dc] via-[#4046a9] to-[#242840] bg-clip-text text-transparent">
-                  Traditional SEO Audit vs 
-                </span>{" "}
-                <span className="text-[#242840]">Rankio AI Visibility Report</span>
+                  Traditional SEO Audit  
+                </span><br></br>{" "}
+                <span className="text-[#242840]">vs</span><br></br>
+                <span className="bg-gradient-to-r from-[#5d67dc] via-[#4046a9] to-[#242840] bg-clip-text text-transparent">Rankio AI Visibility Report</span>
               </h2>
               <p className="mt-3 text-sm leading-7 text-[#7b8698] md:text-[16px]">
                 See how Rankio goes beyond a standard SEO audit with AI-specific analysis, scoring, and actionable guidance.

@@ -101,6 +101,17 @@ type DiscoveryResult = {
     confidence: number;
   };
   discoveryNotes: string[];
+  rendering: {
+    enabled: boolean;
+    pagesRendered: number;
+  };
+};
+
+type RenderedPageResult = {
+  html: string;
+  status: number | null;
+  contentType: string | null;
+  finalUrl: string | null;
 };
 
 type AnalysisFinding = {
@@ -305,6 +316,12 @@ function hasAllCategoryScores(rawScanData: any): boolean {
   return keys.every((key) => typeof categories?.[key]?.score === "number");
 }
 
+
+function isCurrentSourceVersion(sourceVersions: unknown): boolean {
+  if (!sourceVersions || typeof sourceVersions !== "object") return false;
+  const versions = sourceVersions as Record<string, unknown>;
+  return versions.scan === scanVersion && versions.crawler === crawlerVersion && versions.psi === psiVersion;
+}
 function readMetaTag(html: string, name: string, attr = "name"): string | null {
   const pattern = new RegExp(
     `<meta[^>]+${attr}=["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*content=["']([^"']*)["'][^>]*>`,
@@ -495,6 +512,10 @@ function extractExternalEntitySources(html: string, baseUrl: string) {
   for (const entity of entities) visit(entity);
 
   return {
+    rendering: {
+      enabled: renderedPages > 0,
+      pagesRendered: renderedPages,
+    },
     brandName: Array.from(brandNames)[0] ?? null,
     publisherName: Array.from(publisherNames)[0] ?? null,
     sameAsUrls: Array.from(sameAsUrls),
@@ -626,6 +647,42 @@ async function fetchText(url: string, timeoutMs = requestTimeoutMs): Promise<{ o
   }
 }
 
+
+function getBrowserRenderEndpoint(): string | null {
+  const endpoint = Deno.env.get("BROWSER_RENDER_URL")?.trim();
+  return endpoint ? endpoint : null;
+}
+
+async function fetchRenderedPage(url: string, timeoutMs = 15000): Promise<RenderedPageResult | null> {
+  const endpoint = getBrowserRenderEndpoint();
+  if (!endpoint) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint.includes("?") ? `${endpoint}&url=${encodeURIComponent(url)}` : `${endpoint}?url=${encodeURIComponent(url)}`, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "RankioBot/1.0 (+https://rankio.ai) Mozilla/5.0",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+    const contentType = response.headers.get("content-type");
+    if (!response.ok || !contentType || !contentType.toLowerCase().includes("html")) {
+      return null;
+    }
+    return {
+      html: await response.text(),
+      status: response.status,
+      contentType,
+      finalUrl: response.url ? response.url.replace(/\/$/, "") : null,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 async function fetchStatus(url: string, timeoutMs = 6000): Promise<{ status: number | null; ok: boolean }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -750,6 +807,8 @@ function collectInternalLinkCandidates(pages: PageSnapshot[], origin: string): s
 async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
   const origin = new URL(normalizedUrl).origin;
   const discoveryNotes: string[] = [];
+  const renderLayerEnabled = Boolean(getBrowserRenderEndpoint());
+  let renderedPages = 0;
   const pageMap = new Map<string, PageSnapshot>();
   const brokenLinks: Array<{ url: string; statusCode: number | null; sourceUrl: string | null }> = [];
 
@@ -758,7 +817,8 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
     throw new Error(`Homepage fetch failed with status ${homepageResult.status}`);
   }
 
-  const homepageHtml = homepageResult.text;
+  const homepageRendered = renderLayerEnabled ? await fetchRenderedPage(normalizedUrl) : null;
+  const homepageHtml = homepageRendered?.html?.trim() ? homepageRendered.html : homepageResult.text;
   const homepageTitle = extractTitle(homepageHtml);
   const homepageCanonical = readCanonical(homepageHtml, normalizedUrl);
   const homepageMetaDescription = readMetaTag(homepageHtml, "description");
@@ -805,6 +865,7 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
   };
   homepage.pageScore = scorePage(homepage);
   pageMap.set(homepage.url, homepage);
+  if (homepageRendered?.html) renderedPages += 1;
   if (homepageHreflangLinks.length > 0) discoveryNotes.push(`Hreflang links discovered: ${homepageHreflangLinks.length}`);
   if (homepageEntitySources.sameAsUrls.length > 0) discoveryNotes.push(`External entity sources discovered: ${homepageEntitySources.sameAsUrls.length}`);
 
@@ -832,10 +893,11 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
     .filter((url) => !pageMap.has(url));
 
   for (const url of candidateUrls.slice(0, crawlLimit - 1)) {
+    const renderedPage = renderLayerEnabled ? await fetchRenderedPage(url) : null;
     const result = await fetchText(url, 10000);
     if (!result.text) continue;
 
-    const html = result.text;
+    const html = renderedPage?.html?.trim() ? renderedPage.html : result.text;
     const title = extractTitle(html);
     const canonicalUrl = readCanonical(html, url);
     const metaDescription = readMetaTag(html, "description");
@@ -881,6 +943,7 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
     };
     page.pageScore = scorePage(page);
     pageMap.set(url, page);
+    if (renderedPage?.html) renderedPages += 1;
   }
 
   const pages = Array.from(pageMap.values());
@@ -918,6 +981,7 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
 
   if (brokenLinks.length > 0) discoveryNotes.push(`Broken links detected: ${brokenLinks.length}`);
   if (entityEnrichment.externalProfiles.length > 0) discoveryNotes.push(`External profiles enriched: ${entityEnrichment.externalProfiles.length}`);
+  if (renderedPages > 0) discoveryNotes.push(`Browser render layer applied to ${renderedPages} page(s)`);
 
   return {
     robotsTxt: robots.robotsTxt,
@@ -933,6 +997,10 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
       confidence: entityEnrichment.confidence,
     },
     discoveryNotes,
+    rendering: {
+      enabled: renderedPages > 0,
+      pagesRendered: renderedPages,
+    },
   };
 }
 
@@ -1151,8 +1219,8 @@ function buildAnalysisFindings(
   findings.push({
     category: "ai",
     severity: pagesWithManyChunks > 0 ? "low" : "medium",
-    signalKey: "vertical_ai_readiness",
-    title: "Vertical-specific AI readiness opportunity",
+    signalKey: "vertical_ai_visibility",
+    title: "Vertical-specific AI visibility opportunity",
     description: verticalSpecificMessage,
     recommendation: "Tune the top pages for the site's vertical so AI systems can interpret the content with less ambiguity.",
     evidence: { vertical, pagesWithSchema, pagesWithMeta, pagesWithOneH1 },
@@ -1183,7 +1251,7 @@ function buildScoreBreakdown(
   const best = Math.round((psiJson?.lighthouseResult?.categories?.["best-practices"]?.score ?? 0) * 100);
   const accessibility = Math.round((psiJson?.lighthouseResult?.categories?.accessibility?.score ?? 0) * 100);
 
-  const technicalReadiness = Math.round(
+  const technicalVisibility = Math.round(
     Math.max(
       0,
       Math.min(
@@ -1198,7 +1266,7 @@ function buildScoreBreakdown(
     ),
   );
 
-  const contentReadiness = Math.round(
+  const contentVisibility = Math.round(
     Math.max(
       0,
       Math.min(
@@ -1223,7 +1291,7 @@ function buildScoreBreakdown(
     ),
   );
 
-  const citationReadiness = Math.round(
+  const citationVisibility = Math.round(
     Math.max(
       0,
       Math.min(
@@ -1238,10 +1306,10 @@ function buildScoreBreakdown(
   );
 
   const overall = Math.round(
-    (technicalReadiness * 0.25) +
-      (contentReadiness * 0.25) +
+    (technicalVisibility * 0.25) +
+      (contentVisibility * 0.25) +
       (aiUnderstanding * 0.25) +
-      (citationReadiness * 0.25),
+      (citationVisibility * 0.25),
   );
 
   const verticalLift =
@@ -1257,10 +1325,10 @@ function buildScoreBreakdown(
 
   return {
     overallScore: Math.max(0, Math.min(100, overall + verticalLift)),
-    technicalReadiness,
-    contentReadiness,
+    technicalVisibility,
+    contentVisibility,
     aiUnderstanding,
-    citationReadiness,
+    citationVisibility,
     crawlability,
     performance,
     seo,
@@ -1700,7 +1768,7 @@ serve(async (req) => {
 
   const { data: cached } = await supabase
     .from("reports")
-    .select("id, website_id, status, ai_score, performance_score, seo_score, technical_score, raw_scan_data, ai_summary, recommendations, generated_at, websites!inner(normalized_url)")
+    .select("id, website_id, status, ai_score, performance_score, seo_score, technical_score, raw_scan_data, ai_summary, recommendations, generated_at, source_versions, websites!inner(normalized_url)")
     .eq("status", "completed")
     .gt("generated_at", freshSince)
     .eq("websites.normalized_url", normalized)
@@ -1708,7 +1776,7 @@ serve(async (req) => {
     .limit(1)
     .maybeSingle();
 
-  if (cached && hasAllCategoryScores((cached as any).raw_scan_data)) {
+  if (cached && hasAllCategoryScores((cached as any).raw_scan_data) && isCurrentSourceVersion((cached as any).source_versions)) {
     if (await isScanCancelled(supabase, scanJobId)) {
       return await cancelScanResponse(supabase, scanJobId, nowIso);
     }
@@ -1842,7 +1910,7 @@ serve(async (req) => {
   const previewPayload = {
     url: normalized,
     vertical,
-    summary: `AI readiness score ${scoreBreakdown.overallScore}/100 based on technical, content, AI, and citation readiness signals.`,
+    summary: `AI visibility score ${scoreBreakdown.overallScore}/100 based on technical, content, AI, and citation visibility signals.`,
     pages_crawled: discovery.pageSnapshots.length,
     sitemap_urls: discovery.sitemapUrls.length,
     top_findings: findings.slice(0, 5),
@@ -1858,6 +1926,7 @@ serve(async (req) => {
       scanned_at: nowIso,
       pages_crawled: discovery.pageSnapshots.length,
       psi_error: psiFailureMessage,
+      rendering: discovery.rendering,
     },
     crawler: {
       robotsTxt: discovery.robotsTxt,
@@ -1866,6 +1935,7 @@ serve(async (req) => {
       brokenLinks: discovery.brokenLinks,
       entityEnrichment: discovery.entityEnrichment,
       discoveryNotes: discovery.discoveryNotes,
+      rendering: discovery.rendering,
       pages: discovery.pageSnapshots.map((page) => ({
         url: page.url,
         canonicalUrl: page.canonicalUrl,
@@ -1894,7 +1964,7 @@ serve(async (req) => {
   };
 
   const aiSummary = stripMarkdownLinks(
-    `${psiFailureMessage ? "PageSpeed data was unavailable, so this report is based on crawler and content signals. " : ""}AI readiness score ${scoreBreakdown.overallScore}/100 based on Performance ${perf}, SEO ${seo}, Best Practices ${best}, Accessibility ${a11y}. ${findings[0]?.title ? `Top issue: ${findings[0].title}.` : ""}`,
+    `${psiFailureMessage ? "PageSpeed data was unavailable, so this report is based on crawler and content signals. " : ""}AI visibility score ${scoreBreakdown.overallScore}/100 based on Performance ${perf}, SEO ${seo}, Best Practices ${best}, Accessibility ${a11y}. ${findings[0]?.title ? `Top issue: ${findings[0].title}.` : ""}`,
   );
 
   const reportLevel = "preview";
@@ -1918,10 +1988,10 @@ serve(async (req) => {
     raw_scan_data: rawScanData,
     preview_payload: previewPayload,
     score_breakdown: {
-      technical_readiness: scoreBreakdown.technicalReadiness,
-      content_readiness: scoreBreakdown.contentReadiness,
+      technical_visibility: scoreBreakdown.technicalVisibility,
+      content_visibility: scoreBreakdown.contentVisibility,
       ai_understanding: scoreBreakdown.aiUnderstanding,
-      citation_readiness: scoreBreakdown.citationReadiness,
+      citation_visibility: scoreBreakdown.citationVisibility,
       overall_score: scoreBreakdown.overallScore,
       vertical,
     },
@@ -2007,5 +2077,6 @@ serve(async (req) => {
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
 });
+
 
 

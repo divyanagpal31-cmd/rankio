@@ -772,7 +772,7 @@ export function MyWebsites() {
             <Globe className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <h3 className="text-lg font-semibold text-primary mb-2">No Reports Yet</h3>
             <p className="text-sm text-muted-foreground mb-6">
-              Add your first website to start monitoring its AI readiness
+              Add your first website to start monitoring its AI visibility
             </p>
             <Button
               className="gap-2"

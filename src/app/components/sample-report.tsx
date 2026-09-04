@@ -29,7 +29,7 @@ export function SampleReport() {
 
   const categoryScores = [
     { category: "SEO Foundation", score: 84 },
-    { category: "AI Readiness", score: 68 },
+    { category: "AI Visibility", score: 68 },
     { category: "UX Clarity", score: 71 },
     { category: "Technical Health", score: 77 },
   ];
@@ -87,7 +87,7 @@ export function SampleReport() {
           <h2 className="mt-4 text-[28px] font-bold tracking-tight text-slate-900 sm:text-3xl md:text-5xl">
             <span className="bg-gradient-to-r from-[#5d67dc] via-[#4046a9] to-[#242840] bg-clip-text text-transparent">
                 See What's Inside Your 
-              </span>{" "}
+              </span><br></br>{" "}
               <span className="text-[#242840]">AI Visibility Report</span>
           </h2>
           <p className="mt-4 text-base leading-7 text-slate-500 md:text-lg">
@@ -125,7 +125,7 @@ export function SampleReport() {
           <div className="overflow-hidden rounded-[18px] border border-[#e7ebf5] bg-white shadow-[0_18px_50px_rgba(26,33,54,0.14)]">
             <div className="flex flex-col gap-6 bg-[linear-gradient(90deg,#142133_0%,#1a2540_100%)] px-5 py-6 text-white md:flex-row md:items-center md:justify-between md:px-6">
               <div className="min-w-0">
-                <h3 className="text-[17px] font-semibold leading-none md:text-[20px]">AI Readiness Report</h3>
+                <h3 className="text-[17px] font-semibold leading-none md:text-[20px]">AI Visibility Report</h3>
                 <p className="mt-2 text-[12px] text-white/72 md:text-[13px]">yourwebsite.com</p>
               </div>
 
@@ -223,7 +223,7 @@ export function SampleReport() {
 
           <div className="mt-10 text-center">
             <p className="mx-auto max-w-2xl text-base leading-7 text-slate-500">
-              Get a personalized AI readiness analysis for your website.
+              Get a personalized AI visibility analysis for your website.
             </p>
             <Button className="mt-5" onClick={handlePrimaryCta}>
               Generate My AI Visibility Report

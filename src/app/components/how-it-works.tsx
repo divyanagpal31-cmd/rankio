@@ -29,7 +29,7 @@ export function HowItWorks() {
     {
       number: "2",
       title: "AI Visibility Analysis",
-      description: "Rankio evaluates website accessibility, structure, structured data, content clarity, brand understanding, and AI citation readiness to measure how AI systems interpret your website.",
+      description: "Rankio evaluates website accessibility, structure, structured data, content clarity, brand understanding, and AI citation visibility to measure how AI systems interpret your website.",
     },
     {
       number: "3",
@@ -48,7 +48,7 @@ export function HowItWorks() {
           <div className="mx-auto mb-12 max-w-3xl text-center">
             <h2 className="text-[28px] font-bold tracking-tight sm:text-[30px] md:text-[42px]" style={{ lineHeight: 1.08 }}>
               <span className="bg-gradient-to-r from-[#585fc9] to-[#fff] bg-clip-text text-transparent">
-                Analyze Your Website in 
+                Analyze Your Website in <br></br>
               </span>{" "}
               <span className="text-[#fff]">Three Simple Steps</span>
             </h2>

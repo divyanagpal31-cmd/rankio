@@ -19,7 +19,7 @@ const scanningSteps = [
   { id: 3, message: "Analyzing SEO signals...", duration: 3000, icon: Search },
   { id: 4, message: "Evaluating structured data...", duration: 2500, icon: Database },
   { id: 5, message: "Measuring UX clarity...", duration: 2000, icon: Grid3x3 },
-  { id: 6, message: "Calculating AI readiness score...", duration: 2500, icon: Brain },
+  { id: 6, message: "Calculating AI visibility score...", duration: 2500, icon: Brain },
   { id: 7, message: "Generating personalized report...", duration: 2000, icon: FileText },
 ];
 
@@ -213,7 +213,7 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
 
           <div className="relative flex min-h-0 flex-1 flex-col p-5 sm:p-7">
             <div className="shrink-0 pr-1 text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a9a7ff]">AI readiness scan</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a9a7ff]">AI visibility scan</p>
               <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Building Your Report</h2>
               <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-white/68">
                 We’ll open your report automatically when it’s ready.

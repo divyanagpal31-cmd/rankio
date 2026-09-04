@@ -46,7 +46,7 @@ export function WhyRankioExists() {
             <span className="text-[#23283f]">Does</span>
           </h2>
           <p className="mx-auto mt-5 max-w-4xl text-[18px] leading-[1.7] text-[#70839a]">
-            Rankio analyzes your website’s AI readiness across SEO, structure, and discoverability. Get a clear
+            Rankio analyzes your website’s AI visibility across SEO, structure, and discoverability. Get a clear
             score, identify gaps, and understand how visible your site is in AI search.
           </p>
         </div>
@@ -59,7 +59,7 @@ export function WhyRankioExists() {
                 key={index}
                 className="group flex min-h-[200px] flex-col rounded-[14px] border border-[#6670df] bg-[#fafaff] p-6 shadow-[0_1px_0_rgba(102,112,223,0.08)] transition-all duration-300 hover:-translate-y-1 hover:border-[#4f57c8] hover:bg-white hover:shadow-[0_16px_32px_rgba(88,95,201,0.14)] sm:min-h-[220px]"
               >
-                <div className="flex h-11 w-11 items-center justify-center rounded-md text-[#5259c7] transition-transform duration-300 group-hover:scale-110">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#6c72e8] bg-white text-[#5259c7] transition-transform duration-300 group-hover:scale-110">
                   <Icon className="h-8 w-8 stroke-[1.5]" />
                 </div>
                 <h3 className="mt-7 text-[18px] font-semibold text-[#1f2633]">{feature.title}</h3>

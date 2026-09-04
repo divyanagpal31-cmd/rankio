@@ -1,4 +1,3 @@
-import aiVisibilityWomanImage from "../../assets/why-ai-visibility-woman.jpeg";
 import timelineAim from "../../assets/timeline-aim.png";
 import timelineGemini from "../../assets/timeline-gemini.png";
 import timelineGrowth from "../../assets/timeline-growth.png";
@@ -6,7 +5,7 @@ import timelineVisible from "../../assets/timeline-visible.png";
 
 function GoogleIcon() {
   return (
-    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-[0_14px_34px_rgba(71,70,176,0.18)]">
+    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[#dfe2ff] bg-white shadow-[0_14px_34px_rgba(71,70,176,0.18)]">
       <svg viewBox="0 0 48 48" aria-hidden="true" className="h-9 w-9">
         <path
           fill="#4285F4"
@@ -37,7 +36,7 @@ function TimelineBubble({
   alt: string;
 }) {
   return (
-    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-[0_14px_34px_rgba(71,70,176,0.18)]">
+    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[#dfe2ff] bg-white shadow-[0_14px_34px_rgba(71,70,176,0.18)]">
       <img src={icon} alt={alt} className="h-10 w-10" />
     </div>
   );
@@ -45,17 +44,17 @@ function TimelineBubble({
 
 function TimelineRow() {
   return (
-    <div className="relative mt-6 pt-2 pb-12 pr-16 sm:pb-16 sm:pr-24 lg:pr-28">
-      <div className="absolute left-[3%] right-[14%] top-[160px] hidden h-[12px] rounded-full bg-[linear-gradient(90deg,rgba(109,108,229,0.18)_0%,rgba(109,108,229,0.38)_32%,rgba(99,103,232,0.68)_64%,rgba(99,103,232,0.9)_100%)] sm:block" />
-      <div className="absolute right-[-6px] top-[104px] hidden sm:block lg:right-[-10px] lg:top-[96px]">
+    <div className="relative mt-4 pb-4 sm:mt-6 sm:pt-2 sm:pb-16 sm:pr-24 lg:pr-28">
+      <div className="absolute left-[3%] right-[60px] top-[160px] hidden h-[12px] rounded-full bg-[linear-gradient(90deg,rgba(109,108,229,0.18)_0%,rgba(109,108,229,0.38)_32%,rgba(99,103,232,0.68)_64%,rgba(99,103,232,0.9)_100%)] sm:block" />
+      <div className="hidden sm:absolute sm:right-[-6px] sm:top-[104px] sm:mt-0 sm:block sm:h-auto sm:w-auto lg:right-[-10px] lg:top-[96px]">
         <img
           src={timelineAim}
           alt="Aim icon"
-          className="h-[108px] w-[108px] object-contain lg:h-[126px] lg:w-[126px]"
+          className="h-full w-full object-contain sm:h-[108px] sm:w-[108px] lg:h-[126px] lg:w-[126px]"
         />
       </div>
 
-      <div className="grid grid-cols-4 gap-3 text-center sm:gap-4 lg:gap-5">
+      <div className="grid grid-cols-1 gap-y-8 text-left sm:grid-cols-4 sm:gap-4 sm:text-center lg:gap-5">
         {[
           {
             heading: "Yesterday",
@@ -84,17 +83,17 @@ function TimelineRow() {
         ].map((item, index) => {
           return (
             <div key={item.heading} className="relative min-w-0">
-              <div className="mx-auto flex max-w-[190px] flex-col items-center">
-                <div className="min-h-[92px]">
-                  <p className="text-[12px] font-semibold leading-none text-[#5d67dc] sm:text-[14px]">{item.heading}</p>
-                  <div className="mt-2 whitespace-pre-line text-[11px] font-semibold leading-[1.35] text-[#23263a] sm:text-[12px]">
+              <div className="flex max-w-none flex-col items-start sm:mx-auto sm:max-w-[190px] sm:items-center">
+                <div className="min-h-0 sm:min-h-[92px]">
+                  <p className="text-[14px] font-semibold leading-none text-[#5d67dc] sm:text-[14px]">{item.heading}</p>
+                  <div className="mt-2 whitespace-pre-line text-[14px] font-semibold leading-[1.35] text-[#23263a] sm:text-[12px]">
                     {item.title}
                   </div>
                 </div>
 
-                <div className="relative mt-[28px] flex h-[84px] w-full items-center justify-center">
-                  <div className="absolute left-1/2 top-[-30px] hidden h-[30px] -translate-x-1/2 border-l border-dashed border-[#d6d8ef] sm:block" />
-                  <div className="absolute left-1/2 top-[-13px] hidden -translate-x-1/2 sm:block">
+                <div className="relative mt-6 flex h-16 w-full items-center justify-start sm:mt-[28px] sm:h-[84px] sm:justify-center">
+                  <div className="absolute left-8 top-[-44px] h-[24px] -translate-x-1/2 border-l border-dashed border-[#d6d8ef] sm:left-1/2 sm:top-[-30px] sm:h-[30px]" />
+                  <div className="absolute left-8 top-[-24px] -translate-x-1/2 sm:left-1/2 sm:top-[-13px]">
                     <span className="block h-3 w-3 rotate-45 border-b-2 border-r-2 border-[#6266e8]" />
                   </div>
 
@@ -107,7 +106,7 @@ function TimelineRow() {
                   </div>
                 </div>
 
-                <p className="mt-4 max-w-[165px] text-[10px] leading-4 text-[#5f6780] sm:text-[11px]">
+                <p className="mt-4 max-w-[280px] text-[13px] leading-6 text-[#5f6780] sm:max-w-[190px] sm:text-[11px] sm:leading-5">
                   {item.description}
                 </p>
               </div>
@@ -138,20 +137,9 @@ export function WhyAiVisibilityMatters() {
           </p>
         </div>
 
-        <div className="mx-auto mt-14 p-4 md:p-6">
-          <div className="grid items-center gap-10 md:grid-cols-[0.82fr_1.18fr] xl:grid-cols-[0.78fr_1.22fr]">
-            <div className="relative flex items-center justify-center overflow-hidden">
-              <img
-                src={aiVisibilityWomanImage}
-                alt="Woman working on a laptop"
-                className="block h-auto w-full max-h-[560px] object-contain object-center sm:max-h-[620px] lg:max-h-[680px]"
-                loading="eager"
-              />
-            </div>
-
-            <div className="relative flex h-full items-center px-0 py-2 md:pl-4 lg:pl-6 xl:pl-10">
-              <TimelineRow />
-            </div>
+        <div className="mx-auto mt-14 p-2 sm:p-4 md:p-6">
+          <div className="relative w-full">
+            <TimelineRow />
           </div>
         </div>
       </div>

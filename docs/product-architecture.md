@@ -50,6 +50,9 @@ Modules:
   - meta tags
   - hreflang
   - broken links
+- **Browser rendering / headless crawl layer**
+  - optional rendered-DOM fetch for JavaScript-heavy pages
+  - feeds the same extractors when available so crawl output stays consistent
 
 - **Performance Signals**
   - Core Web Vitals
@@ -64,11 +67,11 @@ Modules:
   - semantic structure
   - entity mentions
 
-- **AI Readiness Signals**
+- **AI Visibility Signals**
   - brand understanding
   - entity completeness
-  - citation readiness
-  - LLM retrieval readiness
+  - citation visibility
+  - LLM retrieval visibility
 
 ### 3) Analysis Layer
 Responsible for converting raw signals into scores and recommendations.
@@ -100,7 +103,7 @@ Suggested data model:
 - `reports` for final report payloads
 - `report_pages` for page-level crawl output
 - `report_findings` for normalized issues
-- `content_chunks` for embedding and retrieval readiness
+- `content_chunks` for embedding and retrieval visibility
 - `report_shares` for shareable access
 
 ### 5) Presentation Layer
@@ -117,7 +120,7 @@ Views:
 
 - **Historical comparison**
   - shows score changes across scans
-  - example: `AI Readiness 72 → 81 (+9)`
+  - example: `AI Visibility 72 → 81 (+9)`
 
 - **PDF export**
   - generates downloadable report output
@@ -149,15 +152,15 @@ Views:
 ## Scoring Model
 
 ### Initial Category Weights
-- Technical Readiness — 25%
-- Content Readiness — 25%
+- Technical Visibility — 25%
+- Content Visibility — 25%
 - AI Understanding — 25%
-- Citation Readiness — 25%
+- Citation Visibility — 25%
 
 ### Notes
 - These weights can be adjusted later by vertical.
 - Example future vertical logic:
-  - eCommerce can weigh schema and citation readiness more heavily
+  - eCommerce can weigh schema and citation visibility more heavily
   - SaaS can weigh brand understanding and entity completeness more heavily
   - Local business can weigh trust and location signals more heavily
 
@@ -175,9 +178,9 @@ Each re-scan should store:
 - source version
 
 Comparison output example:
-- `AI Readiness 72 → 81 (+9)`
-- `Content Readiness 64 → 70 (+6)`
-- `Citation Readiness 58 → 62 (+4)`
+- `AI Visibility 72 → 81 (+9)`
+- `Content Visibility 64 → 70 (+6)`
+- `Citation Visibility 58 → 62 (+4)`
 
 ## Access Model
 
@@ -203,6 +206,7 @@ Comparison output example:
 
 ## Current Implementation Notes
 - PageSpeed Insights remains part of the performance layer.
+- The crawl layer can optionally use a browser-rendered DOM when `BROWSER_RENDER_URL` is configured.
 - The scanner should be refactored into modules rather than a single monolithic step.
 - The architecture should continue to support future monitoring, competitor tracking, and recurring audits without a rebuild.
 

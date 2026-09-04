@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, FileText, CreditCard, Settings, LogOut, Menu, X, Home } from "lucide-react";
+import { LayoutDashboard, FileText, CreditCard, Settings, LogOut, Menu, X, Home, Link as LinkIcon } from "lucide-react";
 import darkLogo from "../../../assets/ec37bb065d49c41d8d194954cdc4226b5e7e1837.png";
 import { Button } from "../ui/button";
 import {
@@ -18,6 +18,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: FileText, label: "Reports", path: "/dashboard/reports" },
   { icon: CreditCard, label: "Subscription", path: "/dashboard/subscription" },
+  { icon: LinkIcon, label: "Integrations", path: "/dashboard/integrations" },
   { icon: Settings, label: "Profile Settings", path: "/dashboard/settings" },
 ];
 

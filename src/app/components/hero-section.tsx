@@ -357,7 +357,7 @@ export function HeroSection() {
                     {/* Category breakdown */}
                     <div className="space-y-3 pt-4 border-t border-border/50">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">SEO Foundation</span>
+                        <span className="text-sm text-muted-foreground">Technical Foundation</span>
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 w-20 bg-gray-100 rounded-full overflow-hidden">
                             <motion.div 
@@ -371,7 +371,7 @@ export function HeroSection() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">AI Readiness</span>
+                        <span className="text-sm text-muted-foreground">AI Visibility</span>
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 w-20 bg-gray-100 rounded-full overflow-hidden">
                             <motion.div 
@@ -524,7 +524,7 @@ export function HeroSection() {
                     </div>
                     <div className="min-w-0 leading-tight">
                       <div className="text-[11px] font-medium text-primary">Citation</div>
-                      <div className="text-[11px] font-medium text-primary">Readiness</div>
+                      <div className="text-[11px] font-medium text-primary">Visibility</div>
                     </div>
                   </motion.div>
                 </motion.div>

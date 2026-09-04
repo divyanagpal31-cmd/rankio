@@ -153,7 +153,7 @@ export function Overview() {
             Welcome back, Alex
           </h1>
           <p className="text-muted-foreground mt-2">
-            Monitor your AI readiness and website performance.
+            Monitor your AI visibility and website performance.
           </p>
         </div>
         <Button

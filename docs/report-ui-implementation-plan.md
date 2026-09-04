@@ -33,7 +33,7 @@ The designs introduce:
 - clearer AI-first language:
   - AEO/GEO
   - citation probability
-  - retrieval readiness
+  - retrieval visibility
   - entity mapping
 
 ## Target Report Structure
@@ -55,7 +55,7 @@ The designs introduce:
 - AI maturity scale
 - 4 category cards:
   - SEO Foundation
-  - AI Readiness
+  - AI Visibility
   - UX Clarity
   - Technical Health
 - top critical issues

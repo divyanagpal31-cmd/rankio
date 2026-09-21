@@ -113,6 +113,12 @@ function normalizeInteger(value: unknown): number | null {
   return null;
 }
 
+function timestampForSort(value?: string | null): number {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 function normalizeSubscription(row: Subscription | null): Subscription | null {
   if (!row) return null;
   return {
@@ -201,22 +207,28 @@ export function useWebsites() {
       }
     }
 
+    const hydratedWebsites = websiteRows.map((w) => {
+      const latest = latestByWebsiteId[w.id];
+      return {
+        ...w,
+        status: latest?.status ?? w.status ?? null,
+        score: latest?.ai_score ?? null,
+        latest_report_id: latest?.id ?? null,
+        latest_report_at: latest?.generated_at ?? null,
+        latest_report_level: latest?.report_level ?? null,
+        latest_access_tier_required: latest?.access_tier_required ?? null,
+        latest_is_cached: latest?.is_cached ?? null,
+      };
+    });
+
+    hydratedWebsites.sort((left, right) => {
+      const leftTime = timestampForSort(left.latest_report_at) || timestampForSort(left.created_at);
+      const rightTime = timestampForSort(right.latest_report_at) || timestampForSort(right.created_at);
+      return rightTime - leftTime;
+    });
+
     setError(null);
-    setData(
-      websiteRows.map((w) => {
-        const latest = latestByWebsiteId[w.id];
-        return {
-          ...w,
-          status: latest?.status ?? w.status ?? null,
-          score: latest?.ai_score ?? null,
-          latest_report_id: latest?.id ?? null,
-          latest_report_at: latest?.generated_at ?? null,
-          latest_report_level: latest?.report_level ?? null,
-          latest_access_tier_required: latest?.access_tier_required ?? null,
-          latest_is_cached: latest?.is_cached ?? null,
-        };
-      })
-    );
+    setData(hydratedWebsites);
     setLoading(false);
   }, [user]);
 
@@ -770,3 +782,4 @@ export function useReportUnlockHistory() {
 
   return { unlocks: data, loading, error, refetch: fetchUnlocks };
 }
+

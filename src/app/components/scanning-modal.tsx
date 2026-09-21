@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, Brain, Check, Database, FileText, Globe, Grid3x3, Loader2, Lock, Search } from "lucide-react";
 import { Dialog, DialogContent } from "./ui/dialog";
 import {
@@ -24,6 +24,7 @@ const scanningSteps = [
 ];
 
 const scanProgressThresholds = [5, 10, 20, 35, 45, 75, 100];
+const stepTransition = { duration: 0.45, ease: "easeOut" } as const;
 
 function deriveStepState(progress: number) {
   if (progress >= 100) {
@@ -185,6 +186,8 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
 
   const progressValue = Math.floor(progress);
   const circleSize = 2 * Math.PI * 88;
+  const activeStep = scanningSteps[currentStep] ?? scanningSteps[0];
+  const ActiveStepIcon = activeStep.icon;
   const handleStopScan = () => {
     setExitWarningOpen(false);
     onStopScan?.();
@@ -248,7 +251,7 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
                       strokeWidth="10"
                       strokeDasharray={circleSize}
                       animate={{ strokeDashoffset: circleSize * (1 - progress / 100) }}
-                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      transition={{ duration: 0.65, ease: "easeInOut" }}
                     />
                     <defs>
                       <linearGradient id="scanProgressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -258,9 +261,33 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
                     </defs>
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-5xl font-bold text-white">{progressValue}</span>
+                    <motion.span
+                      key={progressValue}
+                      initial={{ opacity: 0.65, y: 3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.18, ease: "easeOut" }}
+                      className="text-5xl font-bold text-white"
+                    >
+                      {progressValue}
+                    </motion.span>
                     <span className="mt-1 text-xs text-white/45">% complete</span>
                   </div>
+                </div>
+
+                <div className="w-full max-w-[280px] rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeStep.id}
+                      initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                      exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+                      transition={{ duration: 0.32, ease: "easeOut" }}
+                      className="flex items-center justify-center gap-2 text-xs font-semibold text-white/80"
+                    >
+                      <ActiveStepIcon className="h-4 w-4 text-[#a9a7ff]" />
+                      <span>{activeStep.message.replace("...", "")}</span>
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
 
                 <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-xs leading-5 text-amber-100">
@@ -282,21 +309,30 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
                   const StepIcon = step.icon;
 
                   return (
-                    <div
+                    <motion.div
                       key={step.id}
                       ref={(element) => {
                         stepRefs.current[step.id] = element;
                       }}
-                      className={`flex min-w-0 items-center gap-4 rounded-xl px-4 py-3 transition-all ${
+                      layout
+                      animate={{
+                        opacity: isCurrent ? 1 : isCompleted ? 0.86 : 0.62,
+                        scale: isCurrent ? 1.015 : 1,
+                      }}
+                      transition={stepTransition}
+                      className={`flex min-w-0 items-center gap-4 rounded-xl px-4 py-3 transition-[background,border-color,box-shadow] duration-500 ease-out ${
                         isCurrent
                           ? "border border-accent/30 bg-gradient-to-r from-accent/25 via-purple-500/20 to-transparent shadow-[0_0_22px_rgba(91,91,214,0.18)]"
                           : isCompleted
-                            ? "bg-white/6"
-                            : "bg-white/[0.025]"
+                            ? "border border-white/10 bg-white/6"
+                            : "border border-transparent bg-white/[0.025]"
                       }`}
                     >
-                      <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                      <motion.div
+                        layout
+                        animate={{ scale: isCurrent ? 1.08 : 1 }}
+                        transition={stepTransition}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors duration-500 ${
                           isCompleted
                             ? "bg-gradient-to-br from-green-400 to-emerald-500"
                             : isCurrent
@@ -313,16 +349,19 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
                         ) : (
                           <StepIcon className="h-5 w-5 text-white/35" />
                         )}
-                      </div>
+                      </motion.div>
 
-                      <span
-                        className={`min-w-0 flex-1 whitespace-normal break-words text-sm leading-5 ${
+                      <motion.span
+                        layout
+                        animate={{ x: isCurrent ? 2 : 0 }}
+                        transition={stepTransition}
+                        className={`min-w-0 flex-1 whitespace-normal break-words text-sm leading-5 transition-colors duration-500 ${
                           isCurrent ? "font-semibold text-white" : isCompleted ? "text-white/78" : "text-white/42"
                         }`}
                       >
                         {step.message}
-                      </span>
-                    </div>
+                      </motion.span>
+                    </motion.div>
                   );
                 })}
               </div>

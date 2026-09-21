@@ -45,7 +45,7 @@ export function HowItWorks() {
         className="relative overflow-hidden bg-[linear-gradient(180deg,#1b2340_0%,#141b33_100%)] py-12 sm:py-16 md:py-24"
       >
         <div className="container relative mx-auto max-w-7xl px-4 md:px-6">
-          <div className="mx-auto mb-12 max-w-3xl text-center">
+          <div className="mx-auto mb-7 max-w-3xl text-center sm:mb-10 md:mb-12">
             <h2 className="text-[28px] font-bold tracking-tight sm:text-[30px] md:text-[42px]" style={{ lineHeight: 1.08 }}>
               <span className="bg-gradient-to-r from-[#585fc9] to-[#fff] bg-clip-text text-transparent">
                 Analyze Your Website in <br></br>
@@ -57,9 +57,9 @@ export function HowItWorks() {
             </p>
           </div>
 
-          <div className="grid items-center gap-10 lg:grid-cols-[1.16fr_0.84fr] lg:gap-14">
-            <div className="relative flex flex-col items-center">
-              <div className="relative hidden w-full max-w-[740px] md:block">
+          <div className="grid items-center gap-6 md:gap-10 lg:grid-cols-[1.16fr_0.84fr] lg:gap-14">
+            <div className="relative hidden flex-col items-center md:flex">
+              <div className="relative w-full max-w-[740px]">
                 <div className="absolute -inset-4 rounded-[2.5rem] bg-[#6c71e9]/10 blur-3xl" />
                 <div className="relative flex min-h-[280px] items-end sm:min-h-[430px]">
                   <img
@@ -108,7 +108,7 @@ export function HowItWorks() {
               </p>
             </div>
 
-            <div className="space-y-7 self-start pt-6">
+            <div className="space-y-5 self-start pt-0 sm:space-y-6 md:space-y-7 md:pt-6">
               {steps.map((step) => {
                 return (
                   <article

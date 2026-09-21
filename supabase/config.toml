@@ -24,3 +24,7 @@ verify_jwt = false
 # Allow report viewers to request an implementation callback.
 # The function uses the service role key internally to write to callback_requests.
 verify_jwt = false
+
+[functions.claim-visitor]
+# Allow authenticated users to claim reports created during a logged-out scan.
+verify_jwt = true

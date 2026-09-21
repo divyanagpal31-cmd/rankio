@@ -57,6 +57,7 @@ import { cancelScan, runScan } from "../services/scan-service";
 import { submitCallbackRequest } from "../services/callback-service";
 import { ScanningModal } from "./scanning-modal";
 import { isScanStateStale } from "../services/scan-staleness";
+import { getVisitorId } from "../services/visitor-id";
 import { TurnstileWidget, isCaptchaEnabled } from "./turnstile-widget";
 
 type ReportRow = {
@@ -1332,6 +1333,33 @@ function writeReportCache(reportId: string, value: unknown) {
   }
 }
 
+async function claimVisitorReportForUser(reportId: string, accessToken?: string | null) {
+  if (!accessToken) return false;
+
+  const visitorId = getVisitorId();
+  const { data, error } = await supabase.functions.invoke("claim-visitor", {
+    body: {
+      report_id: reportId,
+      visitor_id: visitorId,
+    },
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (error) {
+    console.warn("claim visitor report failed", error);
+    return false;
+  }
+
+  const claimed = Number((data as any)?.claimed ?? 0);
+  const merged = Number((data as any)?.merged ?? 0);
+  if (claimed > 0 || merged > 0) {
+    window.dispatchEvent(new Event("rankio:visitor-claimed"));
+    window.dispatchEvent(new Event("rankio:dashboard-refresh"));
+  }
+
+  return true;
+}
+
 function normalizePdfText(value: unknown) {
   return String(value ?? "")
     .replace(/[""]/g, '"')
@@ -1800,6 +1828,9 @@ export function ReportPage() {
   const reportId = searchParams.get("reportId");
   const [reportById, setReportById] = useState<any | null | undefined>(undefined);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [unlockingReport, setUnlockingReport] = useState(false);
+  const [unlockAttemptedReportId, setUnlockAttemptedReportId] = useState<string | null>(null);
+  const [unlockFailedReportId, setUnlockFailedReportId] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [searchConsoleSnapshot, setSearchConsoleSnapshot] = useState<any | null>(null);
   const [searchConsoleLoading, setSearchConsoleLoading] = useState(false);
@@ -1837,16 +1868,29 @@ export function ReportPage() {
 
       setReportError(null);
 
-      let reportQuery = supabase
-        .from("reports")
-        .select(user ? "*, websites!inner(user_id)" : "*")
-        .eq("id", reportId);
+      const fetchReport = async () => {
+        let reportQuery = supabase
+          .from("reports")
+          .select(user ? "*, websites!inner(user_id)" : "*")
+          .eq("id", reportId);
 
-      if (user) {
-        reportQuery = reportQuery.eq("websites.user_id", user.id);
+        if (user) {
+          reportQuery = reportQuery.eq("websites.user_id", user.id);
+        }
+
+        return reportQuery.maybeSingle();
+      };
+
+      let { data, error } = await fetchReport();
+
+      if (!error && !data && user && session?.access_token) {
+        const claimed = await claimVisitorReportForUser(reportId, session.access_token);
+        if (claimed) {
+          const retry = await fetchReport();
+          data = retry.data;
+          error = retry.error;
+        }
       }
-
-      const { data, error } = await reportQuery.maybeSingle();
 
       if (cancelled) return;
 
@@ -1871,7 +1915,7 @@ export function ReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [reportId, reportFromState, user]);
+  }, [reportId, reportFromState, session?.access_token, user]);
 
   useEffect(() => {
     const sectionIds = ["executive-summary", "ai-audit", "implementation-plan", "roadmap"];
@@ -1987,8 +2031,11 @@ export function ReportPage() {
   const hasRemainingCredits = reportQuota !== null && reportsUsed < reportQuota;
   const hasSubscriptionAccess = !!user && (subscription?.lifetime_access === true || hasRemainingCredits);
   const isFullReport = !!user && String((activeReport as any)?.report_level ?? "").trim().toLowerCase() === "full";
+  const canAutoUnlockReport = !!reportId && !!user && !!activeReport && !isFullReport;
+  const isUnlockPending =
+    unlockingReport ||
+    (canAutoUnlockReport && unlockAttemptedReportId !== reportId && unlockFailedReportId !== reportId);
   const hasPaidAccess = reportId ? isFullReport : hasSubscriptionAccess;
-  const isUnlockPending = false;
   const isGuest = !hasPaidAccess;
   const remainingCredits = reportQuota !== null ? Math.max(reportQuota - reportsUsed, 0) : 0;
   const hasExhaustedCredits =
@@ -2005,6 +2052,65 @@ export function ReportPage() {
   const reportAccessTier = String((activeReport as any)?.access_tier_required ?? "unknown").trim();
   const upgradePromptType = needsCreditTopUp ? "credits" : needsPlanPurchase ? "plan" : null;
   const shouldShowUpgradePrompt = !!activeReport && !!user && !hasPaidAccess && !isUnlockPending && !subscriptionLoading && !!upgradePromptType;
+  useEffect(() => {
+    if (!reportId || !user || !activeReport || loadingReport || unlockingReport) return;
+    if (String((activeReport as any)?.report_level ?? "").trim().toLowerCase() === "full") return;
+    if (unlockAttemptedReportId === reportId || unlockFailedReportId === reportId) return;
+
+    let cancelled = false;
+
+    const unlockReport = async () => {
+      setUnlockingReport(true);
+      setUnlockAttemptedReportId(reportId);
+
+      const { data, error } = await supabase.rpc("unlock_report_with_credit", {
+        p_report_id: reportId,
+      });
+
+      if (cancelled) return;
+
+      const status = String((data as any)?.status ?? "").trim();
+      if (error || status !== "success") {
+        console.warn("automatic report unlock failed", error ?? data);
+        setUnlockFailedReportId(reportId);
+        setUnlockingReport(false);
+        return;
+      }
+
+      const { data: refreshed, error: refreshError } = await supabase
+        .from("reports")
+        .select("*, websites!inner(user_id)")
+        .eq("id", reportId)
+        .eq("websites.user_id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (!refreshError && refreshed) {
+        const resolvedReport = (({ websites: _websites, ...report }) => report)(refreshed as any);
+        setReportById(resolvedReport);
+        writeReportCache(reportId, resolvedReport);
+        try {
+          sessionStorage.setItem(getReportUnlockStorageKey(user.id, reportId), "1");
+        } catch {
+          // ignore storage failures
+        }
+      } else {
+        setReportById((current: any) => current ? { ...current, report_level: "full", generated_by: "authenticated" } : current);
+      }
+
+      window.dispatchEvent(new Event("rankio:subscription-updated"));
+      window.dispatchEvent(new Event("rankio:dashboard-refresh"));
+      setUnlockingReport(false);
+    };
+
+    void unlockReport();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeReport, loadingReport, reportId, unlockAttemptedReportId, unlockFailedReportId, unlockingReport, user]);
+
   const display = displayUrl(
     rawScanData?.lighthouseResult?.finalUrl ?? 
       rawScanData?.lighthouseResult?.requestedUrl ?? 

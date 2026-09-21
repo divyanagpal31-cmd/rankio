@@ -134,7 +134,7 @@ export function Footer({ variant = "landing", className, onNavigate }: FooterPro
         </div>
 
         <div className="mt-12 border-t border-white/10 pt-8">
-          <p className="max-w-4xl text-sm leading-7">
+          <p className="text-sm leading-7">
             Rankio helps businesses understand how AI-powered search systems interpret their websites. We do not guarantee rankings, citations, or search placement. Recommendations are based on current best practices and publicly available web standards.
           </p>
           <p className="mt-4 text-sm font-medium">

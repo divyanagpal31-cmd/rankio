@@ -36,12 +36,32 @@ export function WhyRankio() {
 
   const comparisonRows = [
     { feature: "Technical SEO", traditional: true, rankio: true },
-    { feature: "AI Visibility Analysis", traditional: false, rankio: true },
-    { feature: "Industry-Specific Scoring", traditional: false, rankio: true },
-    { feature: "AI Citation Visibility", traditional: false, rankio: true },
-    { feature: "Action Plan", traditional: "Limited", rankio: true },
-    { feature: "Downloadable Report", traditional: "Varies", rankio: true },
+    { feature: "AI visibility analysis", traditional: false, rankio: true },
+    { feature: "Industry-specific scoring", traditional: false, rankio: true },
+    { feature: "AI citation visibility", traditional: false, rankio: true },
+    { feature: "Action plan", traditional: "Limited", rankio: true },
+    { feature: "Downloadable report", traditional: "Varies", rankio: true },
   ];
+
+  const renderTraditionalStatus = (value: boolean | string) => {
+    if (value === true) {
+      return <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">Included</span>;
+    }
+
+    if (value === false) {
+      return <span className="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-700">Not included</span>;
+    }
+
+    return <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-700">{value}</span>;
+  };
+
+  const renderRankioStatus = (value: boolean | string) => {
+    if (value === true) {
+      return <span className="inline-flex items-center rounded-full bg-[#eef0ff] px-3 py-1 font-semibold text-[#5b63d8]">Included</span>;
+    }
+
+    return <span className="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-700">Not included</span>;
+  };
 
   return (
     <section id="why-rankio" className="bg-[#F6F6FF] py-20 md:py-28">
@@ -96,8 +116,46 @@ export function WhyRankio() {
             </div>
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-[14px] border border-[#e2e6f3]">
-            <div className="overflow-x-auto">
+          <div className="mt-6 overflow-hidden rounded-[14px] border border-[#e2e6f3] bg-white">
+            <div className="md:hidden">
+              <div className="grid grid-cols-[minmax(150px,42%)_minmax(0,1fr)]">
+                <div className="border-r border-[#edf0f7] bg-white">
+                  <div className="flex min-h-[64px] items-center bg-[#f6f7ff] px-4 py-4 text-sm font-semibold text-[#232c41]">
+                    Feature
+                  </div>
+                  {comparisonRows.map((row, index) => (
+                    <div
+                      key={row.feature}
+                      className={`flex min-h-[92px] items-center px-4 py-4 text-sm font-medium leading-5 text-[#232c41] ${
+                        index !== comparisonRows.length - 1 ? "border-b border-[#edf0f7]" : ""
+                      }`}
+                    >
+                      {row.feature}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="overflow-x-auto">
+                  <div className="min-w-[390px]">
+                    <div className="grid min-h-[64px] grid-cols-2 bg-[#f6f7ff] text-left">
+                      <div className="flex items-center px-4 py-4 text-sm font-semibold text-[#232c41]">Traditional SEO Audit</div>
+                      <div className="flex items-center px-4 py-4 text-sm font-semibold text-[#232c41]">Rankio AI Visibility Report</div>
+                    </div>
+                    {comparisonRows.map((row, index) => (
+                      <div
+                        key={row.feature}
+                        className={`grid min-h-[92px] grid-cols-2 ${index !== comparisonRows.length - 1 ? "border-b border-[#edf0f7]" : ""}`}
+                      >
+                        <div className="flex items-center px-4 py-4 text-sm text-[#5c677b]">{renderTraditionalStatus(row.traditional)}</div>
+                        <div className="flex items-center px-4 py-4 text-sm text-[#5c677b]">{renderRankioStatus(row.rankio)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-[720px] w-full border-collapse bg-white">
                 <thead>
                   <tr className="bg-[#f6f7ff] text-left">
@@ -113,32 +171,8 @@ export function WhyRankio() {
                       className={index !== comparisonRows.length - 1 ? "border-b border-[#edf0f7]" : ""}
                     >
                       <td className="px-5 py-4 text-sm font-medium text-[#232c41]">{row.feature}</td>
-                      <td className="px-5 py-4 text-sm text-[#5c677b]">
-                        {row.traditional === true ? (
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                            Included
-                          </span>
-                        ) : row.traditional === false ? (
-                          <span className="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-                            Not included
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-                            {row.traditional}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-sm text-[#5c677b]">
-                        {row.rankio === true ? (
-                          <span className="inline-flex items-center rounded-full bg-[#eef0ff] px-3 py-1 font-semibold text-[#5b63d8]">
-                            Included
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full bg-rose-50 px-3 py-1 font-semibold text-rose-700">
-                            Not included
-                          </span>
-                        )}
-                      </td>
+                      <td className="px-5 py-4 text-sm text-[#5c677b]">{renderTraditionalStatus(row.traditional)}</td>
+                      <td className="px-5 py-4 text-sm text-[#5c677b]">{renderRankioStatus(row.rankio)}</td>
                     </tr>
                   ))}
                 </tbody>

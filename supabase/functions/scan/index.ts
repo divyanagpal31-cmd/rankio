@@ -1639,6 +1639,9 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
     aiCrawlerAccess: robots.aiCrawlerAccess,
     sitemapDiscoveredUrls: uniqueSitemapUrls,
     pageSnapshots: pages,
+    schemaValidation,
+    topicAnalysis,
+    napConsistency,
     brokenLinks,
     entityEnrichment: {
       brandName: homepageEntitySources.brandName,
@@ -2316,6 +2319,7 @@ async function cloneReportArtifacts(supabase: any, sourceReportId: string, targe
 }
 
 serve(async (req) => {
+  try {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
@@ -2887,12 +2891,32 @@ serve(async (req) => {
   }
 
   const unlocked = shouldUnlockFullReport && await consumePaidReportCredit(supabase, userId, String(report.id));
+  if (shouldUnlockFullReport && !unlocked) {
+    await logAdminError(supabase, {
+      source: "scan",
+      severity: "error",
+      code: "FULL_REPORT_UNLOCK_FAILED",
+      message: "Scan completed but paid report unlock failed",
+      details: { report_id: String(report.id), paid_scan_access: paidScanAccess },
+      userId,
+      reportId: String(report.id),
+      websiteUrl: normalized,
+    });
+  }
   const responseReport = unlocked ? { ...(report as any), report_level: "full" } : report;
   await updateJob({ status: "completed", progress: 100, completed_at: nowIso });
 
   return new Response(JSON.stringify({ ...(responseReport as any as ReportRow), cached: false, credit_used: unlocked }), {
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("unhandled scan error", error);
+    return new Response(JSON.stringify({ error: "SCAN_UNEXPECTED_ERROR", message: "We couldn't scan that website right now. Please try again in a few minutes.", details: message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+  }
 });
 
 

@@ -106,11 +106,11 @@ export function SampleReport() {
                   A quick view of the value you get before diving into the full report.
                 </p>
               </div>
-              <ul className="flex flex-wrap gap-x-5 gap-y-3">
+              <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-3">
                 {reportIncludes.map((item) => (
                   <li
                     key={item}
-                    className="inline-flex items-center gap-2 rounded-full bg-[#f5f7ff] px-3 py-2 text-[13px] font-medium text-[#44506a]"
+                    className="flex w-full items-center gap-2 rounded-full bg-[#f5f7ff] px-3 py-2 text-[13px] font-medium text-[#44506a] sm:inline-flex sm:w-auto"
                   >
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#6e69dc]/10 text-[#6e69dc]">
                       <CheckCircle2 className="h-3.5 w-3.5" />

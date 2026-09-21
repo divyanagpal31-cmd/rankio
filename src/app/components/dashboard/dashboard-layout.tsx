@@ -17,7 +17,7 @@ import { Footer } from "../footer";
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: FileText, label: "Reports", path: "/dashboard/reports" },
-  { icon: CreditCard, label: "Subscription", path: "/dashboard/subscription" },
+  { icon: CreditCard, label: "Credits", path: "/dashboard/credits" },
   { icon: LinkIcon, label: "Integrations", path: "/dashboard/integrations" },
   { icon: Settings, label: "Profile Settings", path: "/dashboard/settings" },
 ];

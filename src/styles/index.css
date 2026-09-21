@@ -295,7 +295,7 @@
   }
 
   .report-print-area button,
-  .report-print-area a[href="/dashboard/subscription"] {
+  .report-print-area a[href="/dashboard/credits"] {
     display: none !important;
   }
 

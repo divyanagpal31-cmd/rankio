@@ -132,7 +132,7 @@ export function Overview() {
     },
     {
       title: "Active Plan",
-      value: stats.activePlan ?? "No active plan",
+      value: stats.activePlan ?? "No active package",
       icon: CreditCard,
       color: "from-green-500 to-emerald-600",
     },

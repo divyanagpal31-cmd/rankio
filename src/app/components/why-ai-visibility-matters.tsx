@@ -83,17 +83,28 @@ function TimelineRow() {
         ].map((item, index) => {
           return (
             <div key={item.heading} className="relative min-w-0">
-              <div className="flex max-w-none flex-col items-start sm:mx-auto sm:max-w-[190px] sm:items-center">
-                <div className="min-h-0 sm:min-h-[92px]">
+              {index < 3 && (
+                <div
+                  aria-hidden="true"
+                  className="absolute left-8 top-8 h-[calc(100%+2rem)] w-[12px] -translate-x-1/2 bg-[#6367e8]/70 sm:hidden"
+                />
+              )}
+              <div className="grid max-w-none grid-cols-[64px_minmax(0,1fr)] items-start gap-x-5 sm:mx-auto sm:flex sm:max-w-[190px] sm:flex-col sm:items-center">
+                <div className="col-start-2 row-start-1 min-h-0 sm:min-h-[92px]">
                   <p className="text-[14px] font-semibold leading-none text-[#5d67dc] sm:text-[14px]">{item.heading}</p>
                   <div className="mt-2 whitespace-pre-line text-[14px] font-semibold leading-[1.35] text-[#23263a] sm:text-[12px]">
-                    {item.title}
+                    {index === 1 ? (
+                      <>
+                        <span className="sm:hidden">{item.title.split("\n").join(" | ")}</span>
+                        <span className="hidden sm:inline">{item.title}</span>
+                      </>
+                    ) : item.title}
                   </div>
                 </div>
 
-                <div className="relative mt-6 flex h-16 w-full items-center justify-start sm:mt-[28px] sm:h-[84px] sm:justify-center">
-                  <div className="absolute left-8 top-[-44px] h-[24px] -translate-x-1/2 border-l border-dashed border-[#d6d8ef] sm:left-1/2 sm:top-[-30px] sm:h-[30px]" />
-                  <div className="absolute left-8 top-[-24px] -translate-x-1/2 sm:left-1/2 sm:top-[-13px]">
+                <div className="relative col-start-1 row-span-2 row-start-1 flex h-16 w-full items-center justify-start sm:mt-[28px] sm:h-[84px] sm:justify-center">
+                  <div className="absolute left-8 top-[-44px] hidden h-[24px] -translate-x-1/2 border-l border-dashed border-[#d6d8ef] sm:left-1/2 sm:top-[-30px] sm:block sm:h-[30px]" />
+                  <div className="absolute left-8 top-[-24px] hidden -translate-x-1/2 sm:left-1/2 sm:top-[-13px] sm:block">
                     <span className="block h-3 w-3 rotate-45 border-b-2 border-r-2 border-[#6266e8]" />
                   </div>
 
@@ -106,7 +117,7 @@ function TimelineRow() {
                   </div>
                 </div>
 
-                <p className="mt-4 max-w-[280px] text-[13px] leading-6 text-[#5f6780] sm:max-w-[190px] sm:text-[11px] sm:leading-5">
+                <p className="col-start-2 row-start-2 mt-4 max-w-[280px] text-[13px] leading-6 text-[#5f6780] sm:max-w-[190px] sm:text-[11px] sm:leading-5">
                   {item.description}
                 </p>
               </div>

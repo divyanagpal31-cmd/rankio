@@ -1,34 +1,43 @@
 import { supabase } from "../../lib/supabase";
 
-export type ContactPayload = {
+export type CallbackRequestPayload = {
   fullName: string;
   email: string;
-  website?: string;
-  reason: string;
-  message: string;
+  country: string;
+  phone: string;
+  company?: string;
+  requirements: string;
+  websiteUrl?: string;
+  reportId?: string;
+  scanScope?: string;
+  sourceUrl?: string;
   captchaToken?: string;
 };
 
-export async function submitContactMessage(
-  payload: ContactPayload,
-): Promise<{ error?: string; contactId?: string; emailSent?: boolean }> {
-  const { data, error } = await supabase.functions.invoke("contact-notify", {
+export async function submitCallbackRequest(
+  payload: CallbackRequestPayload,
+): Promise<{ error?: string; requestId?: string; emailSent?: boolean }> {
+  const { data, error } = await supabase.functions.invoke("callback-notify", {
     body: {
       full_name: payload.fullName.trim(),
       email: payload.email.trim(),
-      website_url: payload.website?.trim() || "",
-      reason: payload.reason.trim(),
-      message: payload.message.trim(),
-      source: "contact-page",
+      country: payload.country.trim(),
+      phone: payload.phone.trim(),
+      company: payload.company?.trim() || "",
+      requirements: payload.requirements.trim(),
+      website_url: payload.websiteUrl?.trim() || "",
+      report_id: payload.reportId?.trim() || "",
+      scan_scope: payload.scanScope?.trim() || "",
+      source_url: payload.sourceUrl?.trim() || "",
       captcha_token: payload.captchaToken?.trim() || "",
     },
   });
 
   if (!error) {
-    const contactId = String((data as any)?.contact_id ?? (data as any)?.contactId ?? "").trim() || undefined;
+    const requestId = String((data as any)?.request_id ?? (data as any)?.requestId ?? "").trim() || undefined;
     const emailSentRaw = (data as any)?.email_sent ?? (data as any)?.emailSent;
     const emailSent = typeof emailSentRaw === "boolean" ? emailSentRaw : undefined;
-    return { contactId, emailSent };
+    return { requestId, emailSent };
   }
 
   const defaultMsg = error.message ?? "Failed to submit";
@@ -59,13 +68,13 @@ export async function submitContactMessage(
   ) {
     return {
       error:
-        "Contact service is not configured. Deploy the `contact-notify` Edge Function and set it to public (verify_jwt=false).",
+        "Callback service is not configured. Deploy the `callback-notify` Edge Function and set it to public (verify_jwt=false).",
     };
   }
 
   if (lower.includes("resend") || lower.includes("service_role") || lower.includes("supabase_url")) {
-    return { error: "We couldn't submit your request right now. Please email support@rankio.ai." };
+    return { error: "We couldn't submit your callback request right now. Please email support@rankio.ai." };
   }
 
-  return { error: defaultMsg || "We couldn't submit your request right now. Please email support@rankio.ai." };
+  return { error: defaultMsg || "We couldn't submit your callback request right now. Please email support@rankio.ai." };
 }

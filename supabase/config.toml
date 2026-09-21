@@ -1,5 +1,5 @@
 [functions.lead-notify]
-# Allow unauthenticated users to submit the subscription enquiry form.
+# Allow unauthenticated users to submit the one-time package enquiry form.
 # The function uses the service role key internally to write to `leads`.
 verify_jwt = false
 
@@ -18,4 +18,9 @@ verify_jwt = true
 
 [functions.cancel-scan]
 # Supports both authenticated and guest scan cancellation.
+verify_jwt = false
+
+[functions.callback-notify]
+# Allow report viewers to request an implementation callback.
+# The function uses the service role key internally to write to callback_requests.
 verify_jwt = false

@@ -33,6 +33,9 @@ import darkLogo from "../../assets/ec37bb065d49c41d8d194954cdc4226b5e7e1837.png"
 import { supabase } from "../../lib/supabase";
 import { AuthModal } from "./auth-modal";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Footer } from "./footer";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -51,8 +54,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useAuth } from "../providers/auth-provider";
 import { useReports, useSubscription } from "../services/data-hooks";
 import { cancelScan, runScan } from "../services/scan-service";
+import { submitCallbackRequest } from "../services/callback-service";
 import { ScanningModal } from "./scanning-modal";
 import { isScanStateStale } from "../services/scan-staleness";
+import { TurnstileWidget, isCaptchaEnabled } from "./turnstile-widget";
 
 type ReportRow = {
   parameter: string;
@@ -70,7 +75,7 @@ type ScoreCard = {
   label: string;
   score: number;
   description: string;
-  tone: "violet" | "blue" | "emerald" | "rose";
+  tone: "violet" | "blue" | "emerald" | "rose" | "amber" | "slate";
   icon: LucideIcon;
 };
 
@@ -102,6 +107,17 @@ type RoadmapBucket = {
   tone: "violet" | "sky" | "amber" | "emerald";
 };
 
+type CallbackForm = {
+  fullName: string;
+  email: string;
+  country: string;
+  phone: string;
+  company: string;
+  requirements: string;
+};
+
+type CallbackFormErrors = Partial<Record<keyof CallbackForm, string>>;
+
 type EvidenceIssue = ReportRow & {
   title: string;
   priority: string;
@@ -113,6 +129,329 @@ type EvidenceIssue = ReportRow & {
   icon: LucideIcon;
   rank: number;
 };
+
+const emptyCallbackForm: CallbackForm = {
+  fullName: "",
+  email: "",
+  country: "",
+  phone: "",
+  company: "",
+  requirements: "",
+};
+
+const countryDialCodes: Record<string, string> = {
+  AC: "+247",
+  AD: "+376",
+  AE: "+971",
+  AF: "+93",
+  AG: "+1",
+  AI: "+1",
+  AL: "+355",
+  AM: "+374",
+  AO: "+244",
+  AR: "+54",
+  AS: "+1",
+  AT: "+43",
+  AU: "+61",
+  AW: "+297",
+  AX: "+358",
+  AZ: "+994",
+  BA: "+387",
+  BB: "+1",
+  BD: "+880",
+  BE: "+32",
+  BF: "+226",
+  BG: "+359",
+  BH: "+973",
+  BI: "+257",
+  BJ: "+229",
+  BL: "+590",
+  BM: "+1",
+  BN: "+673",
+  BO: "+591",
+  BQ: "+599",
+  BR: "+55",
+  BS: "+1",
+  BT: "+975",
+  BW: "+267",
+  BY: "+375",
+  BZ: "+501",
+  CA: "+1",
+  CC: "+61",
+  CD: "+243",
+  CF: "+236",
+  CG: "+242",
+  CH: "+41",
+  CI: "+225",
+  CK: "+682",
+  CL: "+56",
+  CM: "+237",
+  CN: "+86",
+  CO: "+57",
+  CR: "+506",
+  CU: "+53",
+  CV: "+238",
+  CW: "+599",
+  CX: "+61",
+  CY: "+357",
+  CZ: "+420",
+  DE: "+49",
+  DJ: "+253",
+  DK: "+45",
+  DM: "+1",
+  DO: "+1",
+  DZ: "+213",
+  EC: "+593",
+  EE: "+372",
+  EG: "+20",
+  EH: "+212",
+  ER: "+291",
+  ES: "+34",
+  ET: "+251",
+  FI: "+358",
+  FJ: "+679",
+  FK: "+500",
+  FM: "+691",
+  FO: "+298",
+  FR: "+33",
+  GA: "+241",
+  GB: "+44",
+  GD: "+1",
+  GE: "+995",
+  GF: "+594",
+  GG: "+44",
+  GH: "+233",
+  GI: "+350",
+  GL: "+299",
+  GM: "+220",
+  GN: "+224",
+  GP: "+590",
+  GQ: "+240",
+  GR: "+30",
+  GT: "+502",
+  GU: "+1",
+  GW: "+245",
+  GY: "+592",
+  HK: "+852",
+  HN: "+504",
+  HR: "+385",
+  HT: "+509",
+  HU: "+36",
+  ID: "+62",
+  IE: "+353",
+  IL: "+972",
+  IM: "+44",
+  IN: "+91",
+  IO: "+246",
+  IQ: "+964",
+  IR: "+98",
+  IS: "+354",
+  IT: "+39",
+  JE: "+44",
+  JM: "+1",
+  JO: "+962",
+  JP: "+81",
+  KE: "+254",
+  KG: "+996",
+  KH: "+855",
+  KI: "+686",
+  KM: "+269",
+  KN: "+1",
+  KP: "+850",
+  KR: "+82",
+  KW: "+965",
+  KY: "+1",
+  KZ: "+7",
+  LA: "+856",
+  LB: "+961",
+  LC: "+1",
+  LI: "+423",
+  LK: "+94",
+  LR: "+231",
+  LS: "+266",
+  LT: "+370",
+  LU: "+352",
+  LV: "+371",
+  LY: "+218",
+  MA: "+212",
+  MC: "+377",
+  MD: "+373",
+  ME: "+382",
+  MF: "+590",
+  MG: "+261",
+  MH: "+692",
+  MK: "+389",
+  ML: "+223",
+  MM: "+95",
+  MN: "+976",
+  MO: "+853",
+  MP: "+1",
+  MQ: "+596",
+  MR: "+222",
+  MS: "+1",
+  MT: "+356",
+  MU: "+230",
+  MV: "+960",
+  MW: "+265",
+  MX: "+52",
+  MY: "+60",
+  MZ: "+258",
+  NA: "+264",
+  NC: "+687",
+  NE: "+227",
+  NF: "+672",
+  NG: "+234",
+  NI: "+505",
+  NL: "+31",
+  NO: "+47",
+  NP: "+977",
+  NR: "+674",
+  NU: "+683",
+  NZ: "+64",
+  OM: "+968",
+  PA: "+507",
+  PE: "+51",
+  PF: "+689",
+  PG: "+675",
+  PH: "+63",
+  PK: "+92",
+  PL: "+48",
+  PM: "+508",
+  PR: "+1",
+  PS: "+970",
+  PT: "+351",
+  PW: "+680",
+  PY: "+595",
+  QA: "+974",
+  RE: "+262",
+  RO: "+40",
+  RS: "+381",
+  RU: "+7",
+  RW: "+250",
+  SA: "+966",
+  SB: "+677",
+  SC: "+248",
+  SD: "+249",
+  SE: "+46",
+  SG: "+65",
+  SH: "+290",
+  SI: "+386",
+  SJ: "+47",
+  SK: "+421",
+  SL: "+232",
+  SM: "+378",
+  SN: "+221",
+  SO: "+252",
+  SR: "+597",
+  SS: "+211",
+  ST: "+239",
+  SV: "+503",
+  SX: "+1",
+  SY: "+963",
+  SZ: "+268",
+  TA: "+290",
+  TC: "+1",
+  TD: "+235",
+  TG: "+228",
+  TH: "+66",
+  TJ: "+992",
+  TK: "+690",
+  TL: "+670",
+  TM: "+993",
+  TN: "+216",
+  TO: "+676",
+  TR: "+90",
+  TT: "+1",
+  TV: "+688",
+  TW: "+886",
+  TZ: "+255",
+  UA: "+380",
+  UG: "+256",
+  US: "+1",
+  UY: "+598",
+  UZ: "+998",
+  VA: "+39",
+  VC: "+1",
+  VE: "+58",
+  VG: "+1",
+  VI: "+1",
+  VN: "+84",
+  VU: "+678",
+  WF: "+681",
+  WS: "+685",
+  XK: "+383",
+  YE: "+967",
+  YT: "+262",
+  ZA: "+27",
+  ZM: "+260",
+  ZW: "+263",
+};
+
+const fallbackCountries = [
+  { code: "AF", name: "Afghanistan" },
+  { code: "AL", name: "Albania" },
+  { code: "DZ", name: "Algeria" },
+  { code: "AR", name: "Argentina" },
+  { code: "AU", name: "Australia" },
+  { code: "AT", name: "Austria" },
+  { code: "BD", name: "Bangladesh" },
+  { code: "BE", name: "Belgium" },
+  { code: "BR", name: "Brazil" },
+  { code: "CA", name: "Canada" },
+  { code: "CN", name: "China" },
+  { code: "DK", name: "Denmark" },
+  { code: "FR", name: "France" },
+  { code: "DE", name: "Germany" },
+  { code: "IN", name: "India" },
+  { code: "ID", name: "Indonesia" },
+  { code: "IE", name: "Ireland" },
+  { code: "IT", name: "Italy" },
+  { code: "JP", name: "Japan" },
+  { code: "MY", name: "Malaysia" },
+  { code: "MX", name: "Mexico" },
+  { code: "NL", name: "Netherlands" },
+  { code: "NZ", name: "New Zealand" },
+  { code: "PK", name: "Pakistan" },
+  { code: "PH", name: "Philippines" },
+  { code: "SG", name: "Singapore" },
+  { code: "ZA", name: "South Africa" },
+  { code: "ES", name: "Spain" },
+  { code: "LK", name: "Sri Lanka" },
+  { code: "SE", name: "Sweden" },
+  { code: "CH", name: "Switzerland" },
+  { code: "AE", name: "United Arab Emirates" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "US", name: "United States" },
+];
+
+function getCountryOptions() {
+  const buildOption = ({ code, name }: { code: string; name: string }) => {
+    const displayCode = countryDialCodes[code] ?? code;
+    return {
+      code,
+      name,
+      label: `${name} (${displayCode})`,
+    };
+  };
+
+  try {
+    const supportedValuesOf = (Intl as any).supportedValuesOf as ((key: string) => string[]) | undefined;
+    const regionCodes = supportedValuesOf?.("region") ?? [];
+    const displayNames = new Intl.DisplayNames(["en"], { type: "region" });
+    const countries = regionCodes
+      .map((code) => ({ code, name: displayNames.of(code) ?? "" }))
+      .filter((country) => Boolean(country.name))
+      .filter((country) => !/unknown region/i.test(country.name));
+
+    return countries
+      .map(buildOption)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  } catch {
+    return fallbackCountries.map(buildOption).sort((left, right) => left.name.localeCompare(right.name));
+  }
+}
+
+const countryOptions = getCountryOptions();
 
 type VerticalKey = "ecommerce" | "saas" | "local" | "content" | "other";
 
@@ -153,6 +492,175 @@ function formatPercent(value?: number | null) {
   return `${Math.round(value)}%`;
 }
 
+function coverageLabel(matchingCount: number, totalCount: number, labels = { none: "Missing", partial: "Partial", full: "Strong" }) {
+  if (totalCount <= 0) return "Not checked";
+  if (matchingCount <= 0) return labels.none;
+  if (matchingCount >= totalCount) return labels.full;
+  return labels.partial;
+}
+
+function availableLabel(count: number, labels = { none: "Not found", some: "Available" }) {
+  return count > 0 ? labels.some : labels.none;
+}
+
+function linkStructureDisplay(internalLinksOut: number, internalLinksIn: number) {
+  const totalLinks = internalLinksOut + internalLinksIn;
+
+  if (totalLinks >= 20) {
+    return {
+      value: "Strong",
+      detail: "Important pages appear well connected, which helps visitors and AI tools follow related information.",
+    };
+  }
+
+  if (totalLinks > 0) {
+    return {
+      value: "Needs review",
+      detail: "Some internal links were found, but key pages may need stronger connections to related content.",
+    };
+  }
+
+  return {
+    value: "Not found",
+    detail: "Add helpful links between related pages so visitors and AI tools can understand how the site fits together.",
+  };
+}
+
+function discoveryNoteDisplay(note?: string | null) {
+  const value = String(note ?? "").trim();
+
+  if (!value) {
+    return {
+      value: "No note",
+      detail: "No extra discovery notes were recorded for this scan.",
+    };
+  }
+
+  if (/sitemap/i.test(value)) {
+    return {
+      value: "Sitemap found",
+      detail: "The scan found sitemap information that can help search engines and AI tools discover important pages.",
+    };
+  }
+
+  if (/robots/i.test(value)) {
+    return {
+      value: "Crawl rules found",
+      detail: "The scan found access instructions for search engines and AI tools.",
+    };
+  }
+
+  if (/browser|render/i.test(value)) {
+    return {
+      value: "Page display checked",
+      detail: "The scan checked whether page content is visible after the page loads.",
+    };
+  }
+
+  return {
+    value: "Reviewed",
+    detail: "An additional discovery signal was checked during the scan.",
+  };
+}
+
+function sitemapStatusDisplay(count: number) {
+  if (count > 0) {
+    return {
+      value: "Found",
+      detail: "A sitemap was found. This helps search engines and AI tools discover important pages faster.",
+    };
+  }
+
+  return {
+    value: "Not found",
+    detail: "Add or submit a sitemap so search engines and AI tools can discover important pages more easily.",
+  };
+}
+
+function contentDepthDisplay(totalWordCount: number) {
+  if (totalWordCount >= 4000) {
+    return {
+      value: "Strong",
+      detail: "The reviewed content gives AI enough context to understand the site's main topics.",
+    };
+  }
+
+  if (totalWordCount >= 1200) {
+    return {
+      value: "Moderate",
+      detail: "The reviewed content gives AI some useful context, but important topics may need more detail.",
+    };
+  }
+
+  return {
+    value: "Needs more detail",
+    detail: "The reviewed content may be too thin for AI tools to understand the site's main topics clearly.",
+  };
+}
+
+function structuredDetailDisplay(schemaTypes: string[]) {
+  const normalizedTypes = schemaTypes.map((type) => String(type ?? "").toLowerCase());
+  const includesType = (patterns: RegExp[]) => normalizedTypes.some((type) => patterns.some((pattern) => pattern.test(type)));
+  const details: string[] = [];
+
+  if (includesType([/organization/, /brand/, /corporation/, /localbusiness/])) details.push("brand or business details");
+  if (includesType([/website/, /webpage/])) details.push("website identity");
+  if (includesType([/review/, /rating/])) details.push("reviews and trust signals");
+  if (includesType([/faq/])) details.push("question-and-answer content");
+  if (includesType([/product/, /offer/])) details.push("product or offer details");
+  if (includesType([/article/, /blogposting/, /newsarticle/])) details.push("article content");
+  if (includesType([/breadcrumb/])) details.push("page navigation");
+
+  const uniqueDetails = Array.from(new Set(details));
+  if (uniqueDetails.length === 0) {
+    return {
+      value: "Not found",
+      detail: "Add business, website, review, and FAQ details so AI tools can understand the site more easily.",
+    };
+  }
+
+  const visibleDetails = uniqueDetails.slice(0, 3);
+  const extraCount = uniqueDetails.length - visibleDetails.length;
+  return {
+    value: visibleDetails.map((detail) => detail.charAt(0).toUpperCase() + detail.slice(1)).join(", "),
+    detail: `AI-readable details found for ${visibleDetails.join(", ")}${extraCount > 0 ? `, and ${extraCount} more area${extraCount === 1 ? "" : "s"}` : ""}.`,
+  };
+}
+
+function aiBotAccessDisplay(access?: any, hasRobotsTxt?: boolean | null): { value: string; detail: string; tone: ScoreCard["tone"] } {
+  const status = String(access?.status ?? "").trim();
+
+  if (status === "allowed") {
+    return {
+      value: "Allowed",
+      detail: "Robots.txt does not appear to block the common AI crawlers we checked.",
+      tone: "emerald",
+    };
+  }
+
+  if (status === "blocked") {
+    return {
+      value: "Blocked",
+      detail: "Robots.txt appears to block common AI crawlers from accessing the site.",
+      tone: "rose",
+    };
+  }
+
+  if (status === "partially_blocked") {
+    return {
+      value: "Needs review",
+      detail: "Robots.txt may limit access for some AI crawlers or important site sections.",
+      tone: "amber",
+    };
+  }
+
+  return {
+    value: "Not checked",
+    detail: hasRobotsTxt ? "Robots.txt was found, but AI crawler access was not checked for this report." : "Robots.txt was not found or could not be checked.",
+    tone: "slate",
+  };
+}
+
 function formatMs(value?: number | null) {
   if (value == null || !Number.isFinite(value)) return "-";
   if (value < 1000) return `${Math.round(value)} ms`;
@@ -164,6 +672,46 @@ function formatCls(value?: number | null) {
   return value.toFixed(2);
 }
 
+function isValidEmailAddress(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isValidPhoneNumber(value: string) {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  return /^\+?[0-9 ()-]{7,20}$/.test(trimmed) && digits.length >= 7 && digits.length <= 15;
+}
+
+function validateCallbackForm(form: CallbackForm): CallbackFormErrors {
+  const errors: CallbackFormErrors = {};
+  const fullName = form.fullName.trim();
+  const email = form.email.trim();
+  const country = form.country.trim();
+  const phone = form.phone.trim();
+  const company = form.company.trim();
+  const requirements = form.requirements.trim();
+
+  if (!fullName) errors.fullName = "Name is required.";
+  else if (fullName.length < 2) errors.fullName = "Name must be at least 2 characters.";
+  else if (!/^[\p{L}][\p{L}\s'.-]*$/u.test(fullName)) errors.fullName = "Use letters, spaces, apostrophes, periods, or hyphens only.";
+
+  if (!email) errors.email = "Email is required.";
+  else if (!isValidEmailAddress(email)) errors.email = "Enter a valid email address.";
+
+  if (!country) errors.country = "Country is required.";
+  else if (country.length < 2) errors.country = "Country must be at least 2 characters.";
+
+  if (!phone) errors.phone = "Phone number is required.";
+  else if (!isValidPhoneNumber(phone)) errors.phone = "Enter a valid phone number.";
+
+  if (company.length > 200) errors.company = "Company must be 200 characters or less.";
+
+  if (!requirements) errors.requirements = "Requirements are required.";
+  else if (requirements.length < 20) errors.requirements = "Please add at least 20 characters.";
+
+  return errors;
+}
+
 function hostFromUrl(value?: string | null) {
   const fallback = String(value ?? "").trim();
   if (!fallback) return "site";
@@ -172,6 +720,28 @@ function hostFromUrl(value?: string | null) {
     return new URL(fallback).host.replace(/^www\./i, "");
   } catch {
     return fallback.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").replace(/^www\./i, "");
+  }
+}
+
+function scanScopeFromUrl(value?: string | null) {
+  try {
+    const url = new URL(String(value ?? ""));
+    const path = url.pathname.replace(/\/+$/, "");
+    const isLandingPage = Boolean(path && path !== "/");
+
+    return {
+      label: isLandingPage ? "Landing Page" : "Website",
+      targetLabel: isLandingPage ? `${url.host.replace(/^www\./i, "")}${path}` : url.host.replace(/^www\./i, ""),
+      description: isLandingPage
+        ? "Started from this exact landing page and reviewed related pages from the same website when available."
+        : "Started from the website homepage and reviewed key related pages when available.",
+    };
+  } catch {
+    return {
+      label: "Website",
+      targetLabel: hostFromUrl(value),
+      description: "Reviewed key pages from this website when available.",
+    };
   }
 }
 
@@ -205,25 +775,25 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         audience: "E-Commerce Teams",
         summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
-          "Your storeâ€™s product pages, category structure, and offer markup determine how well AI assistants can recommend your products.",
+          "Your store's product pages, category structure, and offer markup determine how well AI assistants can recommend your products.",
         summaryBody:
           "This report highlights the signals that influence shopping intent, product discovery, and answer engine citations for retail and catalog sites.",
         categoryCopy: {
-          seo: "Product discovery, category crawlability, and merchandising metadata.",
-          ai: "Product entities, offer clarity, and shopping-intent answerability.",
+          seo: "How easily shoppers and search tools can find product and category pages.",
+          ai: "How clearly AI tools can understand products, offers, and buying intent.",
           ux: "Navigation, filters, and purchase-path clarity.",
-          tech: "Catalog speed, rendering stability, and checkout resilience.",
+          tech: "How quickly product pages load and how reliably the shopping journey works.",
         },
         contentFocus: "Product Entity Mapping",
-        structuredFocus: "Product, Offer, and Review schema coverage",
-        semanticFocus: "Variant, brand, and collection relationships",
-        uxFocus: "Product browseability and conversion clarity",
-        techFocus: "Catalog performance and bot render efficiency",
+        structuredFocus: "product, offer, and review details",
+        semanticFocus: "variant, brand, and collection relationships",
+        uxFocus: "easy product browsing and purchase clarity",
+        techFocus: "catalog speed and page display reliability",
         roadmapTitle: "Strategic Commerce AI Roadmap",
         roadmapLead: "Retail-specific fixes that improve visibility, citation rate, and conversion confidence.",
         roadmapSummary:
-          "Prioritize product schema, category architecture, and page speed so AI systems can trust and recommend your catalog with less ambiguity.",
-        projectedLabel: "Projected Commerce Score",
+          "Prioritize product details, category structure, and page speed so AI systems can trust and recommend your catalog with less ambiguity.",
+        projectedLabel: "Possible Commerce Score After Fixes",
       };
     case "saas":
       return {
@@ -236,48 +806,48 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         summaryBody:
           "This report emphasizes pricing pages, docs, feature clarity, and trust signals that matter for software evaluation and acquisition intent.",
         categoryCopy: {
-          seo: "Feature pages, docs crawlability, and pricing discoverability.",
-          ai: "Feature entities, use cases, and comparison visibility.",
+          seo: "How easily people and search tools can find feature, pricing, and help pages.",
+          ai: "How clearly AI tools can understand features, use cases, and comparisons.",
           ux: "Demo funnels, navigation, and value-prop clarity.",
-          tech: "App shell performance and documentation delivery.",
+          tech: "How quickly product and documentation pages load.",
         },
         contentFocus: "Feature and use-case mapping",
-        structuredFocus: "Product, software, and FAQ schema coverage",
+        structuredFocus: "product, software, and FAQ details",
         semanticFocus: "Feature, workflow, and use-case relationships",
         uxFocus: "Trial and demo journey clarity",
-        techFocus: "App speed, docs delivery, and crawl efficiency",
+        techFocus: "app speed and documentation delivery",
         roadmapTitle: "Strategic SaaS AI Roadmap",
         roadmapLead: "Fix the pages that influence demo interest, trust, and AI-driven shortlist inclusion.",
         roadmapSummary:
           "Strengthen product messaging, documentation structure, and structured data so AI agents can explain what your software does and who it is for.",
-        projectedLabel: "Projected SaaS Score",
+        projectedLabel: "Possible SaaS Score After Fixes",
       };
     case "local":
       return {
         key: vertical,
-        label: "Local Business",
-        audience: "Local Growth Teams",
+        label: "Nearby Customer Visibility",
+        audience: "Local and Service Businesses",
         summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
-          "Your location pages, service coverage, and trust signals determine how well AI systems surface you for nearby and service-intent queries.",
+          "This checks whether AI tools can understand where you serve customers, what you offer, and how people can contact you.",
         summaryBody:
-          "This report focuses on location clarity, NAP consistency, review signals, and local schema that influence map results and answer engine recommendations.",
+          "This report focuses on clear business details, service pages, customer trust signals, and location information that help AI recommend your business to the right people.",
         categoryCopy: {
-          seo: "Location pages, service-area indexing, and local trust signals.",
-          ai: "Business entities, services, and nearby search intent.",
-          ux: "Contact clarity, phone actions, and mobile usability.",
-          tech: "Mobile speed, map delivery, and page stability.",
+          seo: "Whether your locations, service areas, and trust signals are easy to find.",
+          ai: "Whether AI can understand your business, services, and customer locations.",
+          ux: "Whether visitors can quickly find contact details, phone numbers, and directions.",
+          tech: "Whether mobile pages load reliably for customers and AI tools.",
         },
-        contentFocus: "Service and location mapping",
-        structuredFocus: "LocalBusiness, Service, and FAQ schema coverage",
-        semanticFocus: "Location, service, and brand trust relationships",
-        uxFocus: "Contact and direction clarity",
-        techFocus: "Mobile speed and local page delivery",
-        roadmapTitle: "Strategic Local AI Roadmap",
-        roadmapLead: "Tune the signals that help AI systems recommend your business in local searches and map-driven queries.",
+        contentFocus: "clear service and location information",
+        structuredFocus: "business details, services, and FAQs",
+        semanticFocus: "how your services, locations, and brand trust connect",
+        uxFocus: "easy contact details and directions",
+        techFocus: "fast mobile pages and reliable local pages",
+        roadmapTitle: "Local AI Visibility Roadmap",
+        roadmapLead: "Improve the signals that help AI tools recommend your business when nearby customers search for your services.",
         roadmapSummary:
-          "Improve NAP consistency, service pages, and structured data so nearby customers and answer engines can trust your business details.",
-        projectedLabel: "Projected Local Score",
+          "Make your business name, address, phone, services, and locations clear so customers and AI tools can trust the information.",
+        projectedLabel: "Possible Local Visibility After Fixes",
       };
     case "content":
       return {
@@ -286,25 +856,25 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         audience: "Content Teams",
         summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
-          "Your article structure, entity depth, and internal linking determine how easily AI systems can quote and summarize your work.",
+          "Your article structure, topic depth, and internal links determine how easily AI systems can quote and summarize your work.",
         summaryBody:
           "This report emphasizes editorial clarity, topic authority, and citation visibility for blogs, publications, and resource libraries.",
         categoryCopy: {
-          seo: "Topic hubs, article crawlability, and editorial discoverability.",
-          ai: "Topic entities, answer depth, and citation visibility.",
+          seo: "How easily people and search tools can find topic hubs and articles.",
+          ai: "How clearly AI tools can understand, quote, and summarize the content.",
           ux: "Readability, structure, and article navigation.",
-          tech: "Media delivery, page speed, and archive performance.",
+          tech: "How quickly articles, media, and archive pages load.",
         },
         contentFocus: "Topic and article mapping",
-        structuredFocus: "Article, FAQ, and author schema coverage",
-        semanticFocus: "Topic clusters and entity depth",
+        structuredFocus: "article, FAQ, and author details",
+        semanticFocus: "topic groups and author trust",
         uxFocus: "Readability and hierarchy",
         techFocus: "Archive speed and media delivery",
         roadmapTitle: "Strategic Content AI Roadmap",
         roadmapLead: "Turn editorial assets into a clearer, more quotable knowledge base for AI search.",
         roadmapSummary:
           "Sharpen topic clusters, author trust, and article structure so your content becomes a stronger source for answers and summaries.",
-        projectedLabel: "Projected Content Score",
+        projectedLabel: "Possible Content Score After Fixes",
       };
     default:
       return {
@@ -313,25 +883,25 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
         audience: "Executive Board",
         summaryTitle: "AI Visibility Executive Overview",
         summaryLead:
-          "Your siteâ€™s structure, content clarity, and technical delivery determine how well AI systems can understand and recommend it.",
+          "Your site's structure, content clarity, and technical delivery determine how well AI systems can understand and recommend it.",
         summaryBody:
           "This report highlights the most important improvements across discovery, interpretability, and technical reliability.",
         categoryCopy: {
-          seo: "Search crawlability, indexability, and metadata consistency.",
-          ai: "LLM retrieval signals, citation visibility, and answerability.",
-          ux: "Information hierarchy, accessibility, and conversion clarity.",
-          tech: "Speed, stability, and bot-friendly delivery quality.",
+          seo: "How easily people and search tools can find and understand important pages.",
+          ai: "How clearly AI tools can understand, trust, and recommend the site.",
+          ux: "How easily visitors can understand the site and take action.",
+          tech: "How quickly pages load and how reliably important content appears.",
         },
-        contentFocus: "Content and entity clarity",
-        structuredFocus: "Schema and metadata coverage",
-        semanticFocus: "Concept and entity relationships",
+        contentFocus: "content clarity",
+        structuredFocus: "business details, page details, and FAQs",
+        semanticFocus: "how the brand, topics, and services connect",
         uxFocus: "Hierarchy and accessibility",
         techFocus: "Speed and delivery quality",
         roadmapTitle: "Strategic AI Visibility Roadmap",
         roadmapLead: "Focused improvements that move the site toward stronger AI visibility and answerability.",
         roadmapSummary:
-          "Prioritize the issues that most directly influence how AI systems crawl, interpret, and cite your pages.",
-        projectedLabel: "Projected Score",
+          "Prioritize the issues that most directly influence how AI systems find, understand, and cite your pages.",
+        projectedLabel: "Possible Score After Fixes",
       };
   }
 }
@@ -404,18 +974,31 @@ function scoreToneClasses(tone: ScoreCard["tone"]) {
         text: "text-[#ffd0d9]",
         border: "border-[#ff8ea2]/30",
       };
+    case "amber":
+      return {
+        ring: "from-[#ffe5a3] via-[#f7cd7b] to-[#e6a94e]",
+        text: "text-[#f7e3b0]",
+        border: "border-[#f1cf7f]/30",
+      };
+    case "slate":
+      return {
+        ring: "from-[#d6d9e6] via-[#a6adbf] to-[#788196]",
+        text: "text-white/70",
+        border: "border-white/15",
+      };
   }
 }
 
 function severityTone(severity: string) {
   if (severity === "Critical") return "border-[#ff8ea2]/35 bg-[#301a2a] text-[#ffb5c7]";
-  if (severity === "High") return "border-[#ffb47b]/35 bg-[#2d2418] text-[#ffd5ad]";
-  if (severity === "Medium") return "border-[#f1cf7f]/30 bg-[#2c2518] text-[#f7e0aa]";
+  if (severity === "High") return "border-[#ff6b6b]/40 bg-[#32181c] text-[#ffaaa8]";
+  if (severity === "Medium") return "border-[#8d8bff]/35 bg-[#202044] text-[#c9c8ff]";
   return "border-[#7ad7b4]/30 bg-[#17251f] text-[#b7f0d8]";
 }
 
 function bucketForTitle(title: string) {
   const value = title.toLowerCase();
+  if (/(nap|business details|address|telephone|phone)/.test(value)) return "content-intelligence";
   if (/(schema|structured|markup|canonical|robots|sitemap|metadata|meta)/.test(value)) return "structured-data";
   if (/(entity|semantic|context|tone|readability|content|faq|heading)/.test(value)) return "content-intelligence";
   if (/(ux|accessibility|mobile|responsive|contrast|keyboard|ui)/.test(value)) return "ux-accessibility";
@@ -475,17 +1058,6 @@ function safeArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function formatCount(value?: number | null, label = "items") {
-  if (typeof value !== "number" || !Number.isFinite(value)) return `0 ${label}`;
-  return `${Math.max(0, Math.round(value))} ${label}`;
-}
-
-function formatFraction(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return "-";
-  const rounded = Math.max(0, Math.min(1, value));
-  return `${Math.round(rounded * 100)}%`;
-}
-
 function rankSeverity(severity: string) {
   if (severity === "Critical") return 0;
   if (severity === "High") return 1;
@@ -504,12 +1076,28 @@ function reportSeverityFromFinding(severity?: string | null) {
 function formatAffectedPage(value?: string | null) {
   const fallback = String(value ?? "").trim();
   if (!fallback) return "Site-wide";
+  if (!isDisplayableContentPageUrl(fallback)) return "Site-wide";
   try {
     const url = new URL(fallback);
     const path = `${url.pathname}${url.search}`.replace(/\/$/, "") || "/";
     return `${url.hostname.replace(/^www\./i, "")}${path}`;
   } catch {
     return fallback.replace(/^https?:\/\//i, "").replace(/^www\./i, "") || "Site-wide";
+  }
+}
+
+function isDisplayableContentPageUrl(value?: string | null) {
+  const fallback = String(value ?? "").trim();
+  if (!fallback) return true;
+  try {
+    const url = new URL(/^https?:\/\//i.test(fallback) ? fallback : `https://${fallback}`);
+    const pathname = url.pathname.toLowerCase();
+    if (/\.(xml|txt|json|rss|atom|pdf|zip|gz|jpg|jpeg|png|gif|webp|svg|ico|css|js|map|mp4|webm|mp3|wav|woff|woff2|ttf|eot)$/i.test(pathname)) return false;
+    if (/(^|\/)(sitemap|feed|rss|atom)([-_a-z0-9]*)?\.(xml|txt|json)$/i.test(pathname)) return false;
+    if (/(^|\/)(sitemap|feed|rss|atom)(\/|$)/i.test(pathname)) return false;
+    return true;
+  } catch {
+    return true;
   }
 }
 
@@ -523,40 +1111,67 @@ function humanizeSignal(value?: string | null) {
 }
 
 function summarizeEvidence(evidence?: Record<string, any> | null) {
-  if (!evidence || typeof evidence !== "object") return "Evidence captured from the scan output and crawler sample.";
+  if (!evidence || typeof evidence !== "object") return "Evidence captured from the site review.";
 
   if (Array.isArray(evidence.brokenLinks) && evidence.brokenLinks.length > 0) {
     const firstBrokenLink = evidence.brokenLinks[0];
-    const target = firstBrokenLink?.url ? formatAffectedPage(String(firstBrokenLink.url)) : "a sampled internal URL";
+    const target = firstBrokenLink?.url ? formatAffectedPage(String(firstBrokenLink.url)) : "an internal page";
     return `${evidence.brokenLinkCount ?? evidence.brokenLinks.length} broken link(s) detected, including ${target}.`;
   }
 
   if ("pagesWithMeta" in evidence && "totalPages" in evidence) {
-    return `${evidence.pagesWithMeta}/${evidence.totalPages} sampled page(s) include meta descriptions.`;
+    const pagesWithMeta = Number(evidence.pagesWithMeta ?? 0);
+    const totalPages = Number(evidence.totalPages ?? 0);
+    if (pagesWithMeta <= 0) return "Meta descriptions were not found on the reviewed key pages.";
+    if (totalPages > 0 && pagesWithMeta >= totalPages) return "Meta descriptions are present across the reviewed key pages.";
+    return "Meta descriptions are missing from some reviewed key pages.";
   }
 
   if ("pagesWithOneH1" in evidence && "totalPages" in evidence) {
-    return `${evidence.pagesWithOneH1}/${evidence.totalPages} sampled page(s) have exactly one clear H1.`;
+    const pagesWithOneH1 = Number(evidence.pagesWithOneH1 ?? 0);
+    const totalPages = Number(evidence.totalPages ?? 0);
+    if (pagesWithOneH1 <= 0) return "Clear main headings were not found on the reviewed key pages.";
+    if (totalPages > 0 && pagesWithOneH1 >= totalPages) return "Reviewed key pages have clear main headings.";
+    return "Some reviewed key pages need a clearer main heading.";
+  }
+
+  if ("totalPages" in evidence) {
+    return "This signal was checked across the reviewed key pages.";
   }
 
   if ("totalSchema" in evidence) {
-    return `${Number(evidence.totalSchema ?? 0)} schema item(s) detected across the sampled pages.`;
+    return Number(evidence.totalSchema ?? 0) > 0
+      ? "Structured details were detected across the reviewed pages."
+      : "No structured details were detected across the reviewed pages.";
+  }
+
+  if (evidence.schemaValidation && typeof evidence.schemaValidation === "object") {
+    const validation = evidence.schemaValidation;
+    return `${Number(validation.errorCount ?? 0)} structured detail issue(s) and ${Number(validation.warningCount ?? 0)} recommendation(s) found.`;
+  }
+
+  if (evidence.napConsistency && typeof evidence.napConsistency === "object") {
+    const nap = evidence.napConsistency;
+    const inconsistent = safeArray<string>(nap.inconsistentFields);
+    return inconsistent.length > 0
+      ? `Inconsistent business details found for: ${inconsistent.join(", ")}.`
+      : "Business details were checked across the reviewed key pages.";
   }
 
   if ("confidence" in evidence) {
-    return `Entity confidence is ${clampScore(Number(evidence.confidence ?? 0), 0)}/100 based on detected brand/profile signals.`;
+    return `Brand confidence is ${clampScore(Number(evidence.confidence ?? 0), 0)}/100 based on detected brand and profile signals.`;
   }
 
   if ("accessibilityScore" in evidence) {
-    return `Lighthouse accessibility score is ${clampScore(Number(evidence.accessibilityScore ?? 0), 0)}/100.`;
+    return `Accessibility score is ${clampScore(Number(evidence.accessibilityScore ?? 0), 0)}/100.`;
   }
 
   if ("avgPageScore" in evidence || "totalWordCount" in evidence) {
-    return `Average page score is ${clampScore(Number(evidence.avgPageScore ?? 0), 0)}/100 with ${formatCount(Number(evidence.totalWordCount ?? 0), "words")} sampled.`;
+    return `Average page quality is ${clampScore(Number(evidence.avgPageScore ?? 0), 0)}/100 based on reviewed content depth.`;
   }
 
   const firstEntry = Object.entries(evidence).find(([, value]) => value !== null && value !== undefined && value !== "");
-  if (!firstEntry) return "Evidence captured from the scan output and crawler sample.";
+  if (!firstEntry) return "Evidence captured from the site review.";
 
   const [key, value] = firstEntry;
   const displayValue = Array.isArray(value) ? `${value.length} item(s)` : String(value);
@@ -566,12 +1181,12 @@ function summarizeEvidence(evidence?: Record<string, any> | null) {
 function issueImpact(severity: string, bucket: string) {
   if (severity === "Critical" || severity === "High") {
     return bucket === "technical-performance"
-      ? "Can block crawl reliability, rendering quality, and user trust."
-      : "Likely suppresses AI confidence, citation visibility, or conversion clarity.";
+      ? "Can make important pages harder to access, load, or trust."
+      : "Can make AI tools less confident when understanding or recommending the site.";
   }
 
   if (severity === "Medium") {
-    return "Creates avoidable ambiguity for AI systems and search crawlers.";
+    return "Creates avoidable confusion for AI tools and search engines.";
   }
 
   return "Useful refinement that compounds once the higher-priority gaps are fixed.";
@@ -598,6 +1213,21 @@ function iconForBucket(bucket: string) {
             : Sparkles;
 }
 
+function hidePageCountCopy(value?: string | null) {
+  return String(value ?? "")
+    .replace(/\b\d+\s+of\s+\d+\s+(?:reviewed|crawled|sampled)\s+pages?\b/gi, "Reviewed key pages")
+    .replace(/\b\d+\s+(?:reviewed|crawled|sampled)\s+page\(s\)/gi, "Reviewed key pages")
+    .replace(/\b\d+\s+(?:reviewed|crawled|sampled)\s+pages?\b/gi, "Reviewed key pages")
+    .replace(/\bacross\s+\d+\s+(?:reviewed|crawled|sampled)\s+page\(s\)/gi, "across the reviewed key pages")
+    .replace(/\bacross\s+\d+\s+(?:reviewed|crawled|sampled)\s+pages?\b/gi, "across the reviewed key pages")
+    .replace(/\(\d+\s+checked\)/gi, "")
+    .replace(/\bcrawled pages\b/gi, "reviewed key pages")
+    .replace(/\bsampled pages\b/gi, "reviewed key pages")
+    .replace(/\breviewed pages\b/gi, "reviewed key pages")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function buildRows(
   activeReport: any,
   fallbackInsights: Array<{
@@ -620,19 +1250,25 @@ function buildRows(
 
       const rawSeverity = String(item?.severity ?? "").trim();
       const severity = rawSeverity === "Info" || rawSeverity === "Good" || rawSeverity === "" ? "Low" : rawSeverity;
-      const suggestion = String(item?.recommendation ?? item?.suggestion ?? "").trim() || parameter;
+      const suggestion = hidePageCountCopy(item?.recommendation ?? item?.suggestion) || parameter;
       const status = severity === "Critical" || severity === "High" ? "error" : severity === "Medium" ? "warning" : "success";
       const category = String(item?.category ?? "").trim();
+      const pageUrl = item?.pageUrl ?? item?.page_url ?? null;
+      const signalKey = item?.signalKey ?? item?.signal_key ?? null;
+
+      if (String(signalKey ?? "").trim() === "thin_content" && pageUrl && !isDisplayableContentPageUrl(String(pageUrl))) {
+        return null;
+      }
 
       return {
         parameter,
         status,
         severity,
         suggestion,
-        description: String(item?.description ?? "").trim(),
+        description: hidePageCountCopy(item?.description),
         evidence: item?.evidence && typeof item.evidence === "object" ? item.evidence : null,
-        pageUrl: item?.pageUrl ?? item?.page_url ?? null,
-        signalKey: item?.signalKey ?? item?.signal_key ?? null,
+        pageUrl: pageUrl && isDisplayableContentPageUrl(String(pageUrl)) ? pageUrl : null,
+        signalKey,
         bucket: category ? bucketForTitle(`${category} ${parameter}`) : bucketForTitle(parameter),
       };
     })
@@ -698,10 +1334,10 @@ function writeReportCache(reportId: string, value: unknown) {
 
 function normalizePdfText(value: unknown) {
   return String(value ?? "")
-    .replace(/[â€œâ€]/g, '"')
-    .replace(/[â€˜â€™]/g, "'")
-    .replace(/[â€“â€”]/g, "-")
-    .replace(/â€¢/g, "-")
+    .replace(/[""]/g, '"')
+    .replace(/['']/g, "'")
+    .replace(/[-—]/g, "-")
+    .replace(/-/g, "-")
     .replace(/\s+/g, " ")
     .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
     .trim();
@@ -1027,23 +1663,6 @@ function SectionCard({
                   <p className="text-[13px] font-medium uppercase tracking-[0.18em] text-white/50">{tile.label}</p>
                   <p className="mt-3 text-[20px] font-semibold text-white">{tile.value}</p>
                 </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-                    tile.tone === "violet"
-                      ? "bg-[#7d73ff]/15 text-[#dcd4ff]"
-                      : tile.tone === "sky"
-                        ? "bg-[#78d1ff]/15 text-[#d5f2ff]"
-                        : tile.tone === "amber"
-                          ? "bg-[#f7cd7b]/15 text-[#f7e6b7]"
-                          : tile.tone === "emerald"
-                            ? "bg-[#75dfb2]/15 text-[#cefae2]"
-                            : tile.tone === "rose"
-                              ? "bg-[#ff8ea2]/15 text-[#ffd1da]"
-                              : "bg-white/10 text-white/70"
-                  }`}
-                >
-                  {tile.tone.toUpperCase()}
-                </span>
               </div>
               <p className="mt-4 max-w-xl text-[14px] leading-7 text-white/62">{tile.detail}</p>
             </div>
@@ -1116,6 +1735,17 @@ export function ReportPage() {
   const [leavePreviewOpen, setLeavePreviewOpen] = useState(false);
   const [rescanning, setRescanning] = useState(false);
   const [rescanMessage, setRescanMessage] = useState<string | null>(null);
+  const [recentReportDialogOpen, setRecentReportDialogOpen] = useState(false);
+  const [recentReportTarget, setRecentReportTarget] = useState<any | null>(null);
+  const [callbackOpen, setCallbackOpen] = useState(false);
+  const [callbackForm, setCallbackForm] = useState<CallbackForm>(emptyCallbackForm);
+  const [callbackErrors, setCallbackErrors] = useState<CallbackFormErrors>({});
+  const [callbackSubmitting, setCallbackSubmitting] = useState(false);
+  const [callbackSubmitted, setCallbackSubmitted] = useState(false);
+  const [callbackNotice, setCallbackNotice] = useState<string | null>(null);
+  const [callbackCaptchaToken, setCallbackCaptchaToken] = useState("");
+  const [callbackCaptchaError, setCallbackCaptchaError] = useState<string | null>(null);
+  const [callbackCaptchaKey, setCallbackCaptchaKey] = useState(0);
   const [scanningModalOpen, setScanningModalOpen] = useState(false);
   const [scanTargetUrl, setScanTargetUrl] = useState("");
   const [scanComplete, setScanComplete] = useState(false);
@@ -1341,9 +1971,14 @@ export function ReportPage() {
   const analysisPayload = rawScanData?.analysis ?? {};
   const crawlerPayload = rawScanData?.crawler ?? {};
   const scoreBreakdownPayload = previewPayload?.score_breakdown ?? (activeReport as any)?.score_breakdown ?? {};
+  const aiCrawlerAccess = crawlerPayload?.aiCrawlerAccess ?? null;
+  const aiBotAccess = useMemo(() => aiBotAccessDisplay(aiCrawlerAccess, Boolean(crawlerPayload?.robotsTxt)), [aiCrawlerAccess, crawlerPayload?.robotsTxt]);
   const crawlerPages = useMemo(() => safeArray<any>(crawlerPayload?.pages), [crawlerPayload?.pages]);
   const crawlerBrokenLinks = useMemo(() => safeArray<any>(crawlerPayload?.brokenLinks), [crawlerPayload?.brokenLinks]);
   const crawlerDiscoveryNotes = useMemo(() => safeArray<string>(crawlerPayload?.discoveryNotes), [crawlerPayload?.discoveryNotes]);
+  const schemaValidation = crawlerPayload?.schemaValidation ?? {};
+  const topicAnalysis = crawlerPayload?.topicAnalysis ?? {};
+  const napConsistency = crawlerPayload?.napConsistency ?? {};
   const entityEnrichment = crawlerPayload?.entityEnrichment ?? {};
   const reportFindings = useMemo(() => safeArray<any>(analysisPayload?.findings), [analysisPayload?.findings]);
   const crux = useMemo(() => getCruxMetrics(rawScanData), [rawScanData]);
@@ -1378,6 +2013,7 @@ export function ReportPage() {
       (activeReport as any)?.url
   );
   const displayHost = hostFromUrl(display);
+  const scanScope = scanScopeFromUrl(display);
   const initials =
     (user?.user_metadata?.full_name as string | undefined)?.slice(0, 2)?.toUpperCase() ||
     (user?.email ? user.email.slice(0, 2).toUpperCase() : "U");
@@ -1461,7 +2097,7 @@ export function ReportPage() {
     setLeavePreviewOpen(false);
 
     if (user) {
-      navigate("/dashboard/subscription?tab=plans", {
+      navigate("/dashboard/credits?tab=plans", {
         state: {
           from: `${location.pathname}${location.search}`,
           reason: "report_unlock",
@@ -1644,19 +2280,25 @@ export function ReportPage() {
       const title = String(finding?.title ?? finding?.signalKey ?? "Finding").trim();
       const severity = reportSeverityFromFinding(finding?.severity);
       const bucket = bucketForTitle(`${finding?.category ?? ""} ${title}`);
+      const pageUrl = finding?.pageUrl ?? null;
+      const signalKey = finding?.signalKey ?? null;
+
+      if (String(signalKey ?? "").trim() === "thin_content" && pageUrl && !isDisplayableContentPageUrl(String(pageUrl))) {
+        return null;
+      }
 
       return {
         parameter: title,
         status: severity === "High" ? "error" : severity === "Medium" ? "warning" : "success",
         severity,
-        suggestion: String(finding?.recommendation ?? finding?.description ?? title).trim(),
-        description: String(finding?.description ?? "").trim(),
+        suggestion: hidePageCountCopy(finding?.recommendation ?? finding?.description) || title,
+        description: hidePageCountCopy(finding?.description),
         evidence: finding?.evidence && typeof finding.evidence === "object" ? finding.evidence : null,
-        pageUrl: finding?.pageUrl ?? null,
-        signalKey: finding?.signalKey ?? null,
+        pageUrl: pageUrl && isDisplayableContentPageUrl(String(pageUrl)) ? pageUrl : null,
+        signalKey,
         bucket,
       } satisfies ReportRow;
-    });
+    }).filter(Boolean) as ReportRow[];
 
     const sourceRows = findingRows.length > 0 ? findingRows : reportRows;
     const sorted = [...sourceRows].sort((left, right) => {
@@ -1697,13 +2339,27 @@ export function ReportPage() {
     const totalAltImages = crawlerPages.reduce((sum, page) => sum + Number(page?.imageAltCount ?? 0), 0);
     const altCoverage = totalImages > 0 ? totalAltImages / totalImages : null;
     const totalWordCount = crawlerPages.reduce((sum, page) => sum + Number(page?.wordCount ?? 0), 0);
+    const contentDepth = contentDepthDisplay(totalWordCount);
     const avgPageScore = crawlerPages.length
       ? crawlerPages.reduce((sum, page) => sum + Number(page?.pageScore ?? 0), 0) / crawlerPages.length
       : null;
+    const firstContentPaintMs = (rawScanData?.metrics?.fcp as number | undefined) ?? null;
+    const loadSpeedDetail = firstContentPaintMs
+      ? firstPerformanceIssue?.suggestion ?? "The first visible content loaded successfully. Keep scripts and large assets lean so pages stay fast."
+      : firstPerformanceIssue?.suggestion
+        ? "Speed timing was not available for this scan, but the audit found page resources that may slow loading. Review the recommendation shown in the action plan."
+        : "Speed timing was not available for this scan. This can happen when the performance provider does not return lab data for the page.";
     const internalLinksOut = crawlerPages.reduce((sum, page) => sum + Number(page?.internalLinksOut ?? 0), 0);
     const internalLinksIn = crawlerPages.reduce((sum, page) => sum + Number(page?.internalLinksIn ?? 0), 0);
-    const h1Consistency = crawlerPages.length > 0 ? pagesWithH1 / crawlerPages.length : null;
     const schemaTypes = Array.from(new Set(crawlerPages.flatMap((page) => safeArray<string>(page?.schemaTypes))));
+    const structuredDetails = structuredDetailDisplay(schemaTypes);
+    const schemaItemCount = Number(schemaValidation?.itemCount ?? 0);
+    const schemaErrorCount = Number(schemaValidation?.errorCount ?? 0);
+    const schemaWarningCount = Number(schemaValidation?.warningCount ?? 0);
+    const topicClusters = safeArray<any>(topicAnalysis?.clusters);
+    const thinTopics = safeArray<string>(topicAnalysis?.thinTopics);
+    const napInconsistentFields = safeArray<string>(napConsistency?.inconsistentFields);
+    const napDetected = Boolean(napConsistency?.detected);
     const firstBrokenLink = crawlerBrokenLinks[0];
     const citationVisibility = clampScore((scoreBreakdownPayload?.citation_visibility ?? scoreBreakdownPayload?.citationVisibility ?? overallScore) as number, overallScore);
     const technicalVisibility = clampScore((scoreBreakdownPayload?.technical_visibility ?? scoreBreakdownPayload?.technicalVisibility ?? technicalScore) as number, technicalScore);
@@ -1713,23 +2369,26 @@ export function ReportPage() {
     const entityConfidence = clampScore(entityEnrichment?.confidence ?? 0, 0);
     const sameAsUrls = safeArray<string>(entityEnrichment?.sameAsUrls);
     const externalProfiles = safeArray<any>(entityEnrichment?.externalProfiles);
-    const discoveryImpact = crawlerDiscoveryNotes[0] ?? "No discovery notes were recorded.";
+    const answerSectionCount = crawlerPages.reduce((sum, page) => sum + safeArray<any>(page?.chunks).length, 0);
+    const linkStructure = linkStructureDisplay(internalLinksOut, internalLinksIn);
+    const discoverySignal = discoveryNoteDisplay(crawlerDiscoveryNotes[0]);
+    const sitemapStatus = sitemapStatusDisplay(Number(rawScanData?.crawler?.sitemapUrls?.length ?? 0));
 
     return [
       {
         id: "ai-search-visibility",
-        eyebrow: "AEO / GEO",
+        eyebrow: "AI Search",
         title: "AI Search Visibility",
-        description: `How well AI systems can retrieve, trust, and cite the site's core answers.`,
+        description: `How well AI tools can find, trust, and cite the site's most important answers.`,
         score: clampScore(Math.max(overallSnapshot, citationVisibility)),
-        scoreLabel: "Citation Visibility",
+        scoreLabel: "Answer Visibility",
         tiles: [
           {
-            label: "Citation Visibility",
+            label: "Answer Visibility",
             value: formatPercent(citationVisibility),
             detail:
               firstAiIssue?.suggestion ??
-              `Pages with clear structure, schema, and answer-ready content are easier for AI systems to cite.`,
+              `Pages with clear structure, helpful details, and direct answers are easier for AI tools to cite.`,
             tone: "violet",
           },
           {
@@ -1737,22 +2396,22 @@ export function ReportPage() {
             value: formatPercent(aiUnderstanding),
             detail:
               previewPayload?.summary ??
-              "Structured signals, crawl depth, and content clarity shape how well language models interpret the site.",
+              "Clear business details, easy-to-read content, and accessible pages help AI tools understand the site.",
             tone: "rose",
           },
         ],
       },
       {
         id: "content-intelligence",
-        eyebrow: "Semantic density",
-        title: "Content Intelligence",
-        description: `Entity mapping, content clarity, and language structure for ${verticalProfile.contentFocus.toLowerCase()}.`,
+        eyebrow: "Content clarity",
+        title: "Content Clarity",
+        description: `How clearly the site explains its brand, services, topics, and locations for ${verticalProfile.contentFocus.toLowerCase()}.`,
         score: clampScore(contentVisibility, overallScore),
         scoreLabel: "Content Visibility",
         tiles: [
           {
             label: "Titles / Meta",
-            value: `${pagesWithTitle}/${crawlerPages.length || 1}`,
+            value: coverageLabel(Math.min(pagesWithTitle, pagesWithMeta), crawlerPages.length),
             detail:
               firstContentIssue?.suggestion ??
               `Unique titles and meta descriptions help the site surface the right pages for AI and search.`,
@@ -1760,100 +2419,127 @@ export function ReportPage() {
           },
           {
             label: "Heading Structure",
-            value: `${pagesWithH1}/${crawlerPages.length || 1}`,
+            value: coverageLabel(pagesWithH1, crawlerPages.length, { none: "Needs work", partial: "Partial", full: "Clear" }),
             detail: `One clear H1 and well-nested supporting headings improve readability and answer extraction.`,
             tone: "amber",
           },
           {
             label: "Content Depth",
-            value: formatCount(Math.round(totalWordCount), "words"),
-            detail: `The crawler found ${formatCount(Math.round(totalWordCount), "words")} across the sampled pages, which gives AI more context.`,
+            value: contentDepth.value,
+            detail: contentDepth.detail,
             tone: "sky",
           },
           {
-            label: "Average Page Score",
+            label: "Page Quality",
             value: formatPercent(avgPageScore),
-            detail: `Page-level structure, text depth, and metadata quality combine into a practical crawlability signal.`,
+            detail: `This reflects whether reviewed pages are clear, complete, and easy for visitors and AI tools to understand.`,
             tone: "emerald",
+          },
+          {
+            label: "Topic Clusters",
+            value: topicClusters.length > 0 ? `${topicClusters.length} found` : "Not enough data",
+            detail:
+              topicClusters.length > 0
+                ? `Top themes: ${topicClusters.slice(0, 3).map((cluster) => String(cluster?.topic ?? "")).filter(Boolean).join(", ")}.`
+                : "The scan needs readable page content to identify recurring topics.",
+            tone: "violet",
+          },
+          {
+            label: "Topic Coverage",
+            value: thinTopics.length > 0 ? `${thinTopics.length} opportun${thinTopics.length === 1 ? "y" : "ies"}` : "No gaps found",
+            detail:
+              thinTopics.length > 0
+                ? `Topics with limited coverage: ${thinTopics.slice(0, 3).join(", ")}.`
+                : "No major topic gaps were identified in the reviewed pages.",
+            tone: thinTopics.length > 0 ? "amber" : "emerald",
           },
         ],
         wide: true,
       },
       {
         id: "structured-data",
-        eyebrow: "Schema coverage",
-        title: "Structured Data",
-        description: `Markup depth, schema completeness, and alternate-language coverage for ${verticalProfile.structuredFocus.toLowerCase()}.`,
+        eyebrow: "AI-readable details",
+        title: "Site Details AI Can Read",
+        description: `How clearly the site explains key details like ${verticalProfile.structuredFocus.toLowerCase()} in a format AI tools can understand.`,
         score: clampScore(Math.max(technicalVisibility, seoScore || 0)),
-        scoreLabel: "Schema Visibility",
+        scoreLabel: "Details Clarity",
         tiles: [
           {
-            label: "Schema Pages",
-            value: `${pagesWithSchema}/${crawlerPages.length || 1}`,
+            label: "Site Detail Check",
+            value: schemaItemCount <= 0 ? "Not found" : schemaErrorCount > 0 || schemaWarningCount > 0 ? "Needs review" : "Clear",
+            detail:
+              schemaErrorCount > 0
+                ? `Some issues and recommendations were found in the site's machine-readable details. Review the affected items in the evidence section.`
+                : schemaItemCount > 0
+                  ? schemaWarningCount > 0
+                    ? "The detected site details include key information AI tools expect, with a few recommendations to review."
+                    : "The detected site details include the key information AI tools expect."
+                  : "No structured details were found on the reviewed pages.",
+            tone: schemaErrorCount > 0 ? "amber" : "emerald",
+          },
+          {
+            label: "AI-Readable Pages",
+            value: coverageLabel(pagesWithSchema, crawlerPages.length, { none: "Not found", partial: "Partial", full: "Strong" }),
             detail:
               firstStructuredIssue?.suggestion ??
-              `JSON-LD schema helps AI systems classify pages and understand the site's business entities.`,
+              `Shows whether key pages include clear details that help AI tools understand the business, services, products, reviews, or FAQs.`,
             tone: "emerald",
           },
           {
-            label: "Schema Types",
-            value: schemaTypes.length > 0 ? `${schemaTypes.length} found` : "None found",
-            detail: schemaTypes.length > 0 ? schemaTypes.slice(0, 3).join(", ") : "Add Organization, WebPage, and page-type schema to improve machine readability.",
+            label: "Detail Types",
+            value: structuredDetails.value,
+            detail: structuredDetails.detail,
             tone: "sky",
           },
           {
-            label: "Hreflang Coverage",
-            value: formatPercent(crawlerPages.length ? crawlerPages.filter((page) => (page?.hreflangLinks?.length ?? 0) > 0).length / crawlerPages.length : null),
-            detail:
-              crawlerPages.some((page) => (page?.hreflangLinks?.length ?? 0) > 0)
-                ? "Alternate-language markup is present on part of the site."
-                : "No hreflang alternates were detected, so localized pages may need clearer language targeting.",
-            tone: "violet",
-          },
-          {
-            label: "Entity Sources",
-            value: sameAsUrls.length > 0 ? `${sameAsUrls.length} sameAs` : "None",
-            detail:
-              entityEnrichment?.brandName || entityEnrichment?.publisherName
-                ? `Brand source: ${entityEnrichment.brandName ?? entityEnrichment.publisherName}.`
-                : "Add official sameAs links to strengthen entity confidence.",
-            tone: "rose",
+            label: "Business Details Match",
+            value: !napDetected
+              ? "Not detected"
+              : napInconsistentFields.length > 0
+                ? "Needs review"
+                : "Consistent",
+            detail: !napDetected
+              ? "No clear business name, address, or phone details were found on the reviewed pages."
+              : napInconsistentFields.length > 0
+                ? `Different ${napInconsistentFields.join(", ")} value(s) were found across the reviewed key pages.`
+                : "Business name, address, and phone details match across the reviewed key pages with available data.",
+            tone: napInconsistentFields.length > 0 ? "amber" : napDetected ? "emerald" : "slate",
           },
         ],
       },
       {
         id: "semantic-health",
-        eyebrow: "Knowledge graph",
-        title: "Semantic Health",
-        description: `How well the site exposes entities and relationships AI systems need for ${verticalProfile.semanticFocus.toLowerCase()}.`,
+        eyebrow: "Brand understanding",
+        title: "AI Understanding",
+        description: `How clearly the site connects the brand, topics, and services AI tools need for ${verticalProfile.semanticFocus.toLowerCase()}.`,
         score: clampScore((aiUnderstanding + citationVisibility) / 2, overallScore),
-        scoreLabel: "Semantic Coverage",
+        scoreLabel: "Understanding Score",
         tiles: [
           {
-            label: "Entity Confidence",
+            label: "Brand Trust Signal",
             value: `${entityConfidence}/100`,
             detail:
               externalProfiles.length > 0
-                ? `External profiles and sameAs sources reinforce brand identity across the web.`
-                : "Structured data did not reveal enough external entity anchors to build strong confidence.",
+                ? `External profiles help confirm the brand identity across the web.`
+                : "The site does not provide enough trusted external brand links yet.",
             tone: "violet",
           },
           {
-            label: "Content Chunks",
-            value: crawlerPages.reduce((sum, page) => sum + safeArray<any>(page?.chunks).length, 0).toString(),
-            detail: `Chunked content is what the retrieval layer uses to simulate citations and answer extraction.`,
+            label: "Answer Sections",
+            value: availableLabel(answerSectionCount, { none: "Needs more detail", some: "Available" }),
+            detail: `Clear content sections make it easier for AI tools to pull useful answers from the site.`,
             tone: "sky",
           },
           {
-            label: "Link Density",
-            value: `${internalLinksOut} out / ${internalLinksIn} in`,
-            detail: `Internal links and page references help AI and search crawlers understand how ideas connect.`,
+            label: "Internal Link Structure",
+            value: linkStructure.value,
+            detail: linkStructure.detail,
             tone: "emerald",
           },
           {
-            label: "Discovery Note",
-            value: discoveryImpact.slice(0, 24) || "None",
-            detail: discoveryImpact,
+            label: "Discovery Check",
+            value: discoverySignal.value,
+            detail: discoverySignal.detail,
             tone: "amber",
           },
         ],
@@ -1861,9 +2547,9 @@ export function ReportPage() {
       },
       {
         id: "ux-accessibility",
-        eyebrow: "Human + machine clarity",
-        title: "UX & Accessibility",
-        description: `How easily humans, bots, and assistive tech can navigate ${verticalProfile.uxFocus.toLowerCase()}.`,
+        eyebrow: "Visitor clarity",
+        title: "User Experience & Accessibility",
+        description: `How easily visitors and AI tools can understand and navigate ${verticalProfile.uxFocus.toLowerCase()}.`,
         score: clampScore(Math.max(accessibilityScore || technicalScore, 45), 45),
         scoreLabel: "Bottlenecks Found",
         tiles: [
@@ -1872,7 +2558,7 @@ export function ReportPage() {
             value: formatPercent(accessibilityScore),
             detail:
               firstUxIssue?.suggestion ??
-              `Better semantic structure makes the site easier for screen readers and AI systems to interpret.`,
+              `Clear page structure makes the site easier for screen readers and AI tools to understand.`,
             tone: "rose",
           },
           {
@@ -1880,68 +2566,55 @@ export function ReportPage() {
             value: formatPercent(altCoverage),
             detail:
               pagesWithAltText > 0
-                ? `${pagesWithAltText} crawled page(s) included at least one image with alt text.`
+                ? "Image alt text was found on reviewed pages that include images."
                 : "Add descriptive alt text to improve accessibility and multimodal understanding.",
             tone: "emerald",
           },
           {
-            label: "Canonical Coverage",
-            value: `${crawlerPages.filter((page) => Boolean(page?.canonicalUrl)).length}/${crawlerPages.length || 1}`,
-            detail: `Canonical tags reduce ambiguity when search engines and AI tools compare similar pages.`,
+            label: "Preferred Page Signals",
+            value: coverageLabel(crawlerPages.filter((page) => Boolean(page?.canonicalUrl)).length, crawlerPages.length, {
+              none: "Missing",
+              partial: "Partial",
+              full: "Clear",
+            }),
+            detail: `These signals help search engines and AI tools understand which version of a similar page should be trusted.`,
             tone: "sky",
           },
           {
-            label: "Noindex Pages",
-            value: `${crawlerPages.filter((page) => Boolean(page?.noindex)).length}`,
-            detail: `Review intentional and accidental noindex directives so important pages stay visible.`,
+            label: "Pages Hidden From Search",
+            value: crawlerPages.some((page) => Boolean(page?.noindex)) ? "Needs review" : "Clear",
+            detail: `Review pages blocked from search so important content stays visible.`,
             tone: "amber",
           },
         ],
       },
       {
         id: "technical-performance",
-        eyebrow: "Speed + render path",
-        title: "Technical Performance",
-        description: `Speed, efficiency, and bot rendering quality for ${verticalProfile.techFocus.toLowerCase()}.`,
+        eyebrow: "Page speed",
+        title: "Site Speed & Reliability",
+        description: `How quickly the site loads and how reliably important pages work for visitors and AI tools.`,
         score: clampScore(Math.max(performanceScore || technicalScore || 75, technicalVisibility), 75),
-        scoreLabel: "Core Web Vitals",
+        scoreLabel: "Speed Score",
         tiles: [
           {
-            label: "FCP",
-            value: formatMs((rawScanData?.metrics?.fcp as number | undefined) ?? null),
-            detail:
-              firstPerformanceIssue?.suggestion ??
-              `Reduce blocking work and trim render-critical scripts for faster first paint on the site.`,
+            label: "Page Load Speed",
+            value: firstContentPaintMs ? formatMs(firstContentPaintMs) : "Not measured",
+            detail: loadSpeedDetail,
             tone: "violet",
           },
           {
-            label: "Broken Links",
-            value: formatCount(crawlerBrokenLinks.length, "found"),
-            detail:
-              crawlerBrokenLinks.length > 0
-                ? `The crawler flagged ${crawlerBrokenLinks.length} broken internal link(s) that should be redirected or repaired.`
-                : "No internal link failures were found in the sampled crawl.",
-            tone: "rose",
-          },
-          {
-            label: "Robots / Sitemap",
-            value: `${rawScanData?.crawler?.robotsTxt ? "robots" : "no robots"} Â· ${rawScanData?.crawler?.sitemapUrls?.length ? "sitemap" : "no sitemap"}`,
-            detail: `Crawl instructions and sitemap hints shape how quickly AI and search crawlers discover the site.`,
-            tone: "sky",
-          },
-          {
-            label: "Average Page Score",
+            label: "Page Quality",
             value: formatPercent(avgPageScore),
-            detail: `A page-level blend of metadata, structure, and content depth helps us track technical quality across the crawl.`,
+            detail: `This reflects whether important pages are clear, complete, and technically reliable.`,
             tone: "emerald",
           },
         ],
       },
       {
         id: "seo-foundation",
-        eyebrow: "Legacy discoverability",
-        title: "SEO Foundation",
-        description: `Traditional search engine trust signals that still matter for AI-assisted discovery in ${verticalProfile.label.toLowerCase()} niches.`,
+        eyebrow: "Search basics",
+        title: "Search Visibility Basics",
+        description: `Core search signals that help people and AI tools discover this ${verticalProfile.label.toLowerCase()} site.`,
         score: clampScore(Math.max(seoScore, technicalVisibility), 68),
         scoreLabel: "Search Signals",
         tiles: [
@@ -1950,61 +2623,104 @@ export function ReportPage() {
             value: formatPercent(seoScore),
             detail:
               firstSeoIssue?.suggestion ??
-              `Search crawlability and metadata consistency continue to matter for AI-assisted discovery.`,
+              `Search visibility, page titles, and descriptions still help AI tools discover and understand the site.`,
             tone: "emerald",
           },
           {
-            label: "Sitemap URLs",
-            value: formatCount(Number(rawScanData?.crawler?.sitemapUrls?.length ?? 0), "found"),
-            detail: "Sitemaps help crawlers reach the most important URLs faster.",
+            label: "Sitemap Status",
+            value: sitemapStatus.value,
+            detail: sitemapStatus.detail,
             tone: "sky",
           },
           {
-            label: "Canonical Coverage",
-            value: `${crawlerPages.filter((page) => Boolean(page?.canonicalUrl)).length}/${crawlerPages.length || 1}`,
-            detail: `Canonical tags help consolidate signals when multiple URLs point to similar content.`,
+            label: "Preferred Page Signals",
+            value: coverageLabel(crawlerPages.filter((page) => Boolean(page?.canonicalUrl)).length, crawlerPages.length, {
+              none: "Missing",
+              partial: "Partial",
+              full: "Clear",
+            }),
+            detail: `These signals help search engines and AI tools trust the right version of similar pages.`,
             tone: "violet",
-          },
-          {
-            label: "Broken Links",
-            value: formatCount(crawlerBrokenLinks.length, "found"),
-            detail:
-              firstBrokenLink?.url
-                ? `Example: ${firstBrokenLink.url}`
-                : "Internal link health looks stable in the sampled crawl.",
-            tone: "rose",
           },
         ],
       },
       {
-        id: "ai-impact",
-        eyebrow: "Prioritized outcome",
-        title: "AI Impact Assessment",
-        description: `How the current findings translate into business impact and next-step leverage for ${verticalProfile.label.toLowerCase()}.`,
-        score: projectedScore,
-        scoreLabel: "Projected Score",
+        id: "supporting-ai-signals",
+        eyebrow: "Additional checks",
+        title: "Supporting AI Signals",
+        description: "Extra signals that help AI tools access, verify, and understand the site more confidently.",
+        score: clampScore((technicalVisibility + entityConfidence + Math.max(seoScore, 50)) / 3, overallScore),
+        scoreLabel: "Support Score",
         tiles: [
           {
-            label: "Highest Priority",
-            value: topIssue?.parameter ?? "No major issue",
+            label: "AI Bot Access",
+            value: aiBotAccess.value,
+            detail: aiBotAccess.detail,
+            tone: aiBotAccess.tone,
+          },
+          {
+            label: "Official Profile Links",
+            value: sameAsUrls.length > 0 ? "Found" : "Not found",
             detail:
-              topIssue?.suggestion ??
-              `Fixing the most severe issue reduces the chance of misinterpretation in AI summaries.`,
+              sameAsUrls.length > 0
+                ? "These links help AI tools confirm that the website, social profiles, and trusted listings belong to the same brand."
+                : "Add official profile links so AI tools can connect the website to the right brand, social profiles, and trusted listings.",
             tone: "rose",
           },
           {
-            label: "Fastest Win",
+            label: "Language Targeting",
+            value: coverageLabel(crawlerPages.filter((page) => (page?.hreflangLinks?.length ?? 0) > 0).length, crawlerPages.length, {
+              none: "Not set",
+              partial: "Partial",
+              full: "Clear",
+            }),
+            detail:
+              crawlerPages.some((page) => (page?.hreflangLinks?.length ?? 0) > 0)
+                ? "Some pages clearly tell search engines which language or region they are for."
+                : "Localized pages may need clearer language and region targeting.",
+            tone: "violet",
+          },
+          {
+            label: "Internal Link Health",
+            value: crawlerBrokenLinks.length > 0 ? "Needs review" : "Clear",
+            detail:
+              firstBrokenLink?.url
+                ? "A broken internal link was found and should be repaired or redirected."
+                : "Internal link health looks stable in the reviewed pages.",
+            tone: crawlerBrokenLinks.length > 0 ? "rose" : "emerald",
+          },
+        ],
+        wide: true,
+      },
+      {
+        id: "ai-impact",
+        eyebrow: "Next steps",
+        title: "Priority Action Plan",
+        description: `A simple view of what to fix first, what can improve quickly, and what helps AI tools trust the site over time.`,
+        score: projectedScore,
+        scoreLabel: "Possible Score After Fixes",
+        tiles: [
+          {
+            label: "Fix First",
+            value: topIssue?.parameter ?? "No major issue",
+            detail:
+              topIssue?.suggestion ??
+              `Start here because this issue is most likely to affect how AI tools understand or recommend the site.`,
+            tone: "rose",
+          },
+          {
+            label: "Quick Win",
             value:
               sortedRows.find((row) => row.severity === "Medium")?.parameter ??
               sortedRows[1]?.parameter ??
               "Content refinement",
-            detail: `The next improvement should be the one that lifts both retrieval quality and user comprehension.`,
+            detail: `This is a practical improvement that can make the site clearer for both visitors and AI tools.`,
             tone: "amber",
           },
           {
-            label: "Growth Lever",
-            value: sameAsUrls.length > 0 ? "Entity reinforcement" : "Schema expansion",
-            detail: `Stronger structured signals improve how AI systems connect content, brand, and intent.`,
+            label: "Long-Term Improvement",
+            value: sameAsUrls.length > 0 ? "Profile links found" : "Add profile links",
+            detail: `Official profile links help AI tools connect the website to the right brand, audience, and trusted sources.`,
             tone: "emerald",
           },
         ],
@@ -2013,11 +2729,15 @@ export function ReportPage() {
     ];
   }, [
     accessibilityScore,
+    aiBotAccess,
     aiScore,
     crawlerBrokenLinks,
     crawlerDiscoveryNotes,
     crawlerPages,
     entityEnrichment,
+    schemaValidation,
+    topicAnalysis,
+    napConsistency,
     overallScore,
     performanceScore,
     previewPayload?.summary,
@@ -2039,53 +2759,54 @@ export function ReportPage() {
     const quickWins = sortedRows.filter((row) => row.severity === "Critical" || row.severity === "High").slice(0, 3);
     const mediumImprovements = sortedRows.filter((row) => row.severity === "Medium").slice(0, 3);
     const advancedImprovements = sortedRows.filter((row) => row.severity === "Low").slice(0, 3);
+    const discoverySignal = discoveryNoteDisplay(crawlerDiscoveryNotes[0]);
     const longTermSignals = [
-      crawlerDiscoveryNotes[0] ?? "Keep refining the crawl layer so the site exposes its most important pages clearly.",
+      discoverySignal.detail,
       entityEnrichment?.brandName
-        ? `Extend sameAs and publisher references so AI systems connect the brand identity to ${entityEnrichment.brandName}.`
-        : "Add official sameAs links to strengthen the brand graph and external entity confidence.",
+        ? `Add more official profile links so AI tools connect the site to ${entityEnrichment.brandName}.`
+        : "Add official profile links so AI tools can confirm the brand behind the website.",
       crawlerBrokenLinks.length > 0
-        ? `Eliminate broken internal links so the crawl graph stays connected and reliable.`
+        ? `Eliminate broken internal links so important pages stay connected and reliable.`
         : "Keep internal links consistent so key pages stay reachable as the site grows.",
     ];
 
     return [
       {
         title: "Quick Wins",
-        phase: "Phase 1 Â· Deployment (1-3 Days)",
-        summary: "Small changes that create immediate gains in retrieval confidence and page clarity.",
+        phase: "Phase 1 · Deployment (1-3 Days)",
+        summary: "Small changes that quickly make pages clearer and easier for AI tools to trust.",
         icon: Rocket,
         items:
           quickWins.length > 0
             ? quickWins.map((row) => `${row.parameter}: ${row.suggestion}`)
-            : ["Fix the highest-priority schema and clarity gaps first.", "Create one page-level FAQ block for the primary topic."],
+            : ["Fix the highest-priority site detail and clarity gaps first.", "Create one helpful FAQ block for the main topic."],
         tone: "violet",
       },
       {
         title: "Medium Improvements",
-        phase: "Phase 2 Â· Integration (1-2 Weeks)",
+        phase: "Phase 2 · Integration (1-2 Weeks)",
         summary: "Structural changes that improve how AI systems interpret your brand and content at scale.",
         icon: Layers3,
         items:
           mediumImprovements.length > 0
             ? mediumImprovements.map((row) => `${row.parameter}: ${row.suggestion}`)
-            : ["Refine page hierarchy, metadata, and entity coverage.", "Reduce ambiguity in supporting content and navigation."],
+            : ["Improve page headings, titles, and brand details.", "Make supporting content and navigation easier to understand."],
         tone: "amber",
       },
       {
         title: "Advanced Optimization",
-        phase: "Phase 3 Â· Scaling (1 Month)",
+        phase: "Phase 3 · Scaling (1 Month)",
         summary: "More strategic work that compounds AI visibility gains over time.",
         icon: Sparkles,
         items:
           advancedImprovements.length > 0
             ? advancedImprovements.map((row) => `${row.parameter}: ${row.suggestion}`)
-            : ["Improve content operations around semantic clusters.", "Strengthen technical delivery for bot rendering."],
+            : ["Build stronger topic groups around the services or products people search for.", "Make sure important content is visible when pages load."],
         tone: "sky",
       },
       {
         title: "Long-term Authority",
-        phase: "Phase 4 Â· Evolution (Ongoing)",
+        phase: "Phase 4 · Evolution (Ongoing)",
         summary: "A durable operating system for AI visibility, citation frequency, and brand trust.",
         icon: TrendingUp,
         items: longTermSignals,
@@ -2205,7 +2926,7 @@ export function ReportPage() {
   const summaryText =
     isGuest
       ? needsCreditTopUp
-        ? "Youâ€™ve used all the report credits included in your current plan. This scan is still available in preview mode, but the full AI audit stays locked until you purchase more credits."
+        ? "You've used all the report credits included in your current plan. This scan is still available in preview mode, but the full AI audit stays locked until you purchase more credits."
         : needsPlanPurchase
           ? "You don't have an active plan right now. This scan is available in preview mode, and you can purchase a plan to unlock the full AI audit, recommendations, and roadmap."
           : "Log in and purchase any plan to unlock the full AI audit, recommendations, and roadmap."
@@ -2240,6 +2961,10 @@ export function ReportPage() {
     previousReport && Number.isFinite(scoreDelta)
       ? `${scoreDelta >= 0 ? "+" : ""}${scoreDelta} vs previous scan`
       : "First recorded scan";
+  const savedUserName = String((user?.user_metadata?.full_name as string | undefined) ?? "").trim();
+  const savedUserEmail = String(user?.email ?? "").trim();
+  const callbackNameReadonly = Boolean(savedUserName);
+  const callbackEmailReadonly = Boolean(savedUserEmail);
 
   const handleExport = () => {
     if (typeof window === "undefined") return;
@@ -2265,12 +2990,75 @@ export function ReportPage() {
   };
 
   const handleImplementationStrategy = () => {
-    setRescanMessage("Implementation strategy booking is not connected yet. We can wire this to your preferred booking or contact flow next.");
+    setCallbackForm({
+      ...emptyCallbackForm,
+      fullName: savedUserName,
+      email: savedUserEmail,
+    });
+    setCallbackErrors({});
+    setCallbackSubmitted(false);
+    setCallbackNotice(null);
+    setCallbackCaptchaToken("");
+    setCallbackCaptchaError(null);
+    setCallbackCaptchaKey((current) => current + 1);
+    setCallbackOpen(true);
+  };
+
+  const updateCallbackField = (field: keyof CallbackForm, value: string) => {
+    setCallbackForm((current) => ({ ...current, [field]: value }));
+    if (callbackErrors[field]) {
+      setCallbackErrors((current) => ({ ...current, [field]: undefined }));
+    }
+  };
+
+  const handleSubmitCallbackRequest = async () => {
+    const errors = validateCallbackForm(callbackForm);
+    setCallbackErrors(errors);
+    setCallbackNotice(null);
+    if (Object.keys(errors).length > 0) return;
+
+    if (isCaptchaEnabled() && !callbackCaptchaToken) {
+      setCallbackCaptchaError("Please complete the CAPTCHA verification.");
+      setCallbackNotice("Please complete the CAPTCHA and try again.");
+      return;
+    }
+
+    setCallbackCaptchaError(null);
+    setCallbackSubmitting(true);
+    const result = await submitCallbackRequest({
+      fullName: callbackForm.fullName,
+      email: callbackForm.email,
+      country: callbackForm.country,
+      phone: callbackForm.phone,
+      company: callbackForm.company,
+      requirements: callbackForm.requirements,
+      websiteUrl: display,
+      reportId: String(activeReport?.id ?? reportId ?? ""),
+      scanScope: scanScope.label,
+      sourceUrl: typeof window !== "undefined" ? window.location.href : "",
+      captchaToken: callbackCaptchaToken,
+    });
+    setCallbackSubmitting(false);
+
+    if (result.error) {
+      setCallbackNotice(result.error);
+      setCallbackCaptchaToken("");
+      setCallbackCaptchaKey((current) => current + 1);
+      return;
+    }
+
+    setCallbackSubmitted(true);
+    setCallbackNotice("Thanks, we received your request. Our team will contact you shortly.");
+    setCallbackCaptchaToken("");
+    setCallbackCaptchaError(null);
+    setCallbackCaptchaKey((current) => current + 1);
   };
 
   const startRescan = async () => {
     if (!user || !activeReport || rescanning) return;
     setRescanMessage(null);
+    setRecentReportTarget(null);
+    setRecentReportDialogOpen(false);
 
     const activeWebsiteId = String((activeReport as any)?.website_id ?? "").trim();
 
@@ -2295,12 +3083,13 @@ export function ReportPage() {
 
       if (latestReport?.id && latestIsFresh) {
         writeReportCache(String(latestReport.id), latestReport);
-        setRescanMessage(`Using the latest report generated within the last ${REPORT_CACHE_HOURS} hours. No credit was used.`);
+        setRescanMessage(
+          `This website was already scanned within the last ${REPORT_CACHE_HOURS} hours. We're showing the latest report instead of running the same scan again.`
+        );
+        setRecentReportTarget(String(latestReport.id) !== String(activeReport?.id ?? "") ? latestReport : null);
+        setRecentReportDialogOpen(true);
         if (String(latestReport.id) !== String(activeReport?.id ?? "")) {
-          const from = `${location.pathname}${location.search}`;
-          navigate(`/report?reportId=${encodeURIComponent(String(latestReport.id))}`, {
-            state: { from, report: latestReport },
-          });
+          return;
         }
         return;
       }
@@ -2311,7 +3100,11 @@ export function ReportPage() {
     const isFresh = Number.isFinite(generatedAtMs) && Date.now() - generatedAtMs < REPORT_CACHE_MS;
 
     if (isFresh) {
-      setRescanMessage(`Using the latest report generated within the last ${REPORT_CACHE_HOURS} hours. No credit was used.`);
+      setRescanMessage(
+        `This website was already scanned within the last ${REPORT_CACHE_HOURS} hours. This is the latest report, so we won't run the same scan again.`
+      );
+      setRecentReportTarget(null);
+      setRecentReportDialogOpen(true);
       return;
     }
 
@@ -2355,6 +3148,14 @@ export function ReportPage() {
     if (data?.id) {
       writeReportCache(data.id, data);
       const from = `${location.pathname}${location.search}`;
+      if (data.cached) {
+        setRescanMessage(
+          `This website was already scanned within the last ${REPORT_CACHE_HOURS} hours. We're showing the latest report instead of running the same scan again.`
+        );
+        setRecentReportTarget(data);
+        setRecentReportDialogOpen(true);
+        return;
+      }
       setScanComplete(true);
       await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
       navigate(`/report?reportId=${encodeURIComponent(data.id)}`, { state: { from, report: data } });
@@ -2554,25 +3355,48 @@ export function ReportPage() {
 
             <div className="report-export-content space-y-8">
               <section id="executive-summary" className="report-section rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_28px_80px_rgba(0,0,0,0.18)] md:p-8">
-                <div className="mb-6 rounded-[18px] border border-amber-400/25 bg-amber-400/10 p-4 text-sm text-amber-100">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                    <div className="shrink-0">
-                      <p className="font-semibold uppercase tracking-[0.18em] text-amber-200">Report Info</p>
-                      {isUnlockPending ? <p className="mt-1 text-xs text-amber-100/75">Unlocking report...</p> : null}
-                    </div>
-                    <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      {[
-                        ["Website", displayHost],
-                        ["Report Type", reportLevelValue === "full" ? "Full Report" : "Preview Report"],
-                        ["Plan", reportAccessTier && reportAccessTier !== "unknown" ? `${reportAccessTier.charAt(0).toUpperCase()}${reportAccessTier.slice(1)} Plan` : reportPlanLabel],
-                        ["Credit Used", reportCreditUsedLabel.replace(/^Credit used:\s*/i, "")],
-                      ].map(([label, value]) => (
-                        <div key={label} className="rounded-xl border border-amber-300/20 bg-black/10 px-3 py-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/80">{label}</p>
-                          <p className="mt-1 truncate font-semibold text-amber-50">{value}</p>
+                <div className="mb-6 overflow-hidden rounded-[22px] border border-amber-400/25 bg-[linear-gradient(135deg,rgba(245,158,11,0.14),rgba(255,255,255,0.05)_52%,rgba(0,0,0,0.12))] p-5 text-sm text-amber-100 shadow-[0_18px_50px_rgba(0,0,0,0.16)]">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="max-w-2xl">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10 text-amber-100">
+                          <FileText className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <p className="font-semibold uppercase tracking-[0.18em] text-amber-200">Report Info</p>
+                          {isUnlockPending ? <p className="mt-1 text-xs text-amber-100/75">Unlocking report...</p> : null}
                         </div>
-                      ))}
+                        <span className="rounded-full border border-amber-300/25 bg-black/15 px-3 py-1 text-xs font-semibold text-amber-50">
+                          {scanScope.label}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-amber-50/80">{scanScope.description}</p>
                     </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      { label: "Website", value: displayHost },
+                      {
+                        label: scanScope.label === "Landing Page" ? "Scanned Page" : "Scanned Site",
+                        value: scanScope.targetLabel,
+                        className: "sm:col-span-2",
+                      },
+                      { label: "Report Type", value: reportLevelValue === "full" ? "Full Report" : "Preview Report" },
+                      {
+                        label: "Plan",
+                        value:
+                          reportAccessTier && reportAccessTier !== "unknown"
+                            ? `${reportAccessTier.charAt(0).toUpperCase()}${reportAccessTier.slice(1)} Plan`
+                            : reportPlanLabel,
+                      },
+                      { label: "Credit Used", value: reportCreditUsedLabel.replace(/^Credit used:\s*/i, "") },
+                    ].map((item) => (
+                      <div key={item.label} className={`rounded-2xl border border-amber-300/20 bg-black/15 px-4 py-3 ${item.className ?? ""}`}>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/80">{item.label}</p>
+                        <p className="mt-1 break-words font-semibold text-amber-50">{item.value}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -2650,9 +3474,9 @@ export function ReportPage() {
 
                     <div className="grid gap-3 md:grid-cols-3">
                       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Projected Score</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Possible Score After Fixes</p>
                         <p className="mt-2 text-sm leading-6 text-white/72">
-                          Your estimated AI-visibility score out of 100 based on structure, content clarity, and technical quality.
+                          An estimate of how the score could improve after the most important recommendations are fixed.
                         </p>
                       </div>
                       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
@@ -2691,7 +3515,7 @@ export function ReportPage() {
                       {user ? (
                         <Button asChild>
                           <Link
-                            to="/dashboard/subscription?tab=plans"
+                            to="/dashboard/credits?tab=plans"
                             state={{
                               from: `${location.pathname}${location.search}`,
                               reason: "report_unlock",
@@ -2777,30 +3601,27 @@ export function ReportPage() {
                 <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   {[
                     {
-                      label: "Pages Crawled",
-                      value: `${crawlerPages.length}`,
-                      detail: "Homepage plus a small set of internal pages are sampled for evidence.",
-                      tone: "violet" as const,
+                      label: "AI Bot Access",
+                      value: aiBotAccess.value,
+                      detail: aiBotAccess.detail,
+                      tone: aiBotAccess.tone,
                     },
                     {
                       label: "Broken Links",
                       value: `${crawlerBrokenLinks.length}`,
-                      detail: crawlerBrokenLinks.length > 0 ? "Internal link issues were found and should be repaired." : "No broken internal links were detected in the sample crawl.",
+                      detail: crawlerBrokenLinks.length > 0 ? "Internal link issues were found and should be repaired." : "No broken internal links were detected in the reviewed pages.",
                       tone: "rose" as const,
                     },
                     {
-                      label: "Entity Confidence",
+                      label: "Brand Trust Signal",
                       value: `${clampScore(entityEnrichment?.confidence ?? 0, 0)}/100`,
-                      detail: entityEnrichment?.brandName ? `Brand identity detected for ${entityEnrichment.brandName}.` : "No strong external entity anchors were detected.",
+                      detail: entityEnrichment?.brandName ? `Brand identity detected for ${entityEnrichment.brandName}.` : "No strong external brand proof was detected.",
                       tone: "emerald" as const,
                     },
                     {
-                      label: "Data Confidence",
-                      value: crawlerPages.length > 1 ? "Multi-page" : "Homepage",
-                      detail:
-                        crawlerPages.length > 1
-                          ? "The report is based on PageSpeed data plus a sampled internal crawl."
-                          : "The report is based on PageSpeed data and homepage-level crawler evidence.",
+                      label: "Report Confidence",
+                      value: "Evidence-backed",
+                      detail: "The report combines performance data with AI visibility evidence from discovered key pages.",
                       tone: "blue" as const,
                     },
                   ].map((stat) => {
@@ -2842,7 +3663,7 @@ export function ReportPage() {
                         <div className="rounded-xl border border-white/10 bg-black/15 p-4">
                           <p className="text-xs uppercase tracking-[0.16em] text-white/45">Avg. Position</p>
                           <p className="mt-2 text-2xl font-semibold text-white">
-                            {searchConsoleSnapshot.averagePosition ? searchConsoleSnapshot.averagePosition.toFixed(1) : "â€”"}
+                            {searchConsoleSnapshot.averagePosition ? searchConsoleSnapshot.averagePosition.toFixed(1) : "—"}
                           </p>
                         </div>
                       </div>
@@ -2976,7 +3797,7 @@ export function ReportPage() {
               <section id="ai-audit" className="report-section space-y-4">
                 <div className="flex items-center gap-3">
                   <h2 className="text-[26px] font-semibold tracking-tight text-white md:text-[34px]">
-                    Detailed AI Audit Â· {verticalProfile.label}
+                    Detailed AI Audit · {verticalProfile.label}
                   </h2>
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.22em] text-white/45">
                     {reportStatusLabel}
@@ -3022,8 +3843,8 @@ export function ReportPage() {
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                        <span>Sampled pages</span>
-                        <span className="font-semibold text-white">{crawlerPages.length}</span>
+                        <span>Evidence coverage</span>
+                        <span className="font-semibold text-white">Key signals</span>
                       </div>
                     </div>
                   </div>
@@ -3098,7 +3919,7 @@ export function ReportPage() {
                       {verticalProfile.roadmapTitle}
                     </h2>
                     <p className="mt-4 max-w-2xl text-[15px] leading-7 text-white/55 md:text-[16px]">
-                      Based on the current scan, weâ€™ve identified a clear path to dominate the AI search ecosystem and
+                      Based on the current scan, we've identified a clear path to dominate the AI search ecosystem and
                       move your site from traditional SEO into AI-native authority.
                     </p>
                   </div>
@@ -3156,42 +3977,42 @@ export function ReportPage() {
                 </div>
 
                 <div className="mt-8 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(122,116,239,0.15)_0%,rgba(255,255,255,0.03)_100%)] p-6 md:p-8">
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="max-w-2xl">
+                  <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-center xl:grid-cols-[minmax(0,1fr)_280px]">
+                    <div className="max-w-3xl">
                       <div className="flex items-center gap-2 text-[#d8cbff]">
                         <Sparkles className="h-5 w-5" />
                         <span className="text-sm font-semibold uppercase tracking-[0.22em]">Want Rankio Experts To Implement These Fixes?</span>
                       </div>
-                      <h3 className="mt-4 text-[26px] font-semibold tracking-tight text-white md:text-[36px]">
+                      <h3 className="mt-4 text-[24px] font-semibold leading-tight tracking-tight text-white md:text-[32px]">
                         Let our team turn this roadmap into a live implementation plan.
                       </h3>
-                      <p className="mt-4 max-w-2xl text-[15px] leading-7 text-white/60">
+                      <p className="mt-4 max-w-3xl text-[15px] leading-7 text-white/60">
                         Skip the learning curve. Our team can deploy the structural optimizations that move your score toward
                         the target threshold faster.
                       </p>
                     </div>
 
-                    <div className="flex flex-col gap-3 sm:flex-row">
+                    <div className="flex w-full flex-col gap-3 lg:justify-self-end">
                       <Button
                         onClick={handleImplementationStrategy}
                         size="lg"
+                        className="w-full justify-center"
                       >
-                        Book Implementation Strategy
+                        Request call back
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                       <Button
                         variant="outline"
                         size="lg"
+                        className="w-full justify-center"
                       >
-                        View Implementation Pricing
+                        Live chat
                       </Button>
                     </div>
                   </div>
                 </div>
               </section>
               )}
-
-              {rescanMessage && <p className="report-screen-chrome text-sm text-white/65">{rescanMessage}</p>}
             </div>
           </div>
         </main>
@@ -3241,7 +4062,7 @@ export function ReportPage() {
               <DialogFooter className="mt-6 gap-3 sm:justify-start">
                 <Button asChild>
                   <Link
-                    to="/dashboard/subscription?tab=plans"
+                    to="/dashboard/credits?tab=plans"
                     state={{
                       from: `${location.pathname}${location.search}`,
                       reason: "report_unlock",
@@ -3310,6 +4131,202 @@ export function ReportPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={callbackOpen} onOpenChange={setCallbackOpen}>
+        <DialogContent
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          className="max-h-[90vh] overflow-y-auto border-slate-200 bg-white p-0 text-slate-950 shadow-[0_30px_100px_rgba(15,23,42,0.28)] sm:max-w-2xl"
+        >
+          <div className="relative overflow-hidden rounded-lg">
+            <div className="absolute inset-x-0 top-0 h-32 bg-[linear-gradient(135deg,rgba(111,116,239,0.12),rgba(255,255,255,0))]" />
+            <div className="relative">
+              <div className="border-b border-slate-100 px-6 py-6 sm:px-8">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-semibold tracking-tight text-slate-950">
+                    Request a call back
+                  </DialogTitle>
+                  <DialogDescription className="pt-2 text-sm leading-7 text-slate-600">
+                    Share your contact details and what you need help with. We'll connect this request to the current report.
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
+
+              <div className="grid gap-4 px-6 py-6 sm:grid-cols-2 sm:px-8">
+                <div className="space-y-2">
+                  <Label htmlFor="callback-name" className="text-sm font-semibold text-slate-700">Name*</Label>
+                  <Input
+                    id="callback-name"
+                    value={callbackForm.fullName}
+                    readOnly={callbackNameReadonly}
+                    onChange={(event) => updateCallbackField("fullName", event.target.value)}
+                    className={`h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30 ${
+                      callbackNameReadonly ? "cursor-not-allowed bg-slate-50 text-slate-700" : ""
+                    }`}
+                    aria-invalid={Boolean(callbackErrors.fullName)}
+                  />
+                  {callbackErrors.fullName ? <p className="text-xs text-rose-600">{callbackErrors.fullName}</p> : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="callback-email" className="text-sm font-semibold text-slate-700">Email*</Label>
+                  <Input
+                    id="callback-email"
+                    type="email"
+                    value={callbackForm.email}
+                    readOnly={callbackEmailReadonly}
+                    onChange={(event) => updateCallbackField("email", event.target.value)}
+                    className={`h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30 ${
+                      callbackEmailReadonly ? "cursor-not-allowed bg-slate-50 text-slate-700" : ""
+                    }`}
+                    aria-invalid={Boolean(callbackErrors.email)}
+                  />
+                  {callbackErrors.email ? <p className="text-xs text-rose-600">{callbackErrors.email}</p> : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="callback-country" className="text-sm font-semibold text-slate-700">Country*</Label>
+                  <select
+                    id="callback-country"
+                    value={callbackForm.country}
+                    onChange={(event) => updateCallbackField("country", event.target.value)}
+                    className="flex h-11 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-invalid={Boolean(callbackErrors.country)}
+                  >
+                    <option value="">Select country</option>
+                    {countryOptions.map((country) => (
+                      <option key={country.code} value={country.label}>
+                        {country.label}
+                      </option>
+                    ))}
+                  </select>
+                  {callbackErrors.country ? <p className="text-xs text-rose-600">{callbackErrors.country}</p> : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="callback-phone" className="text-sm font-semibold text-slate-700">Phone number*</Label>
+                  <Input
+                    id="callback-phone"
+                    value={callbackForm.phone}
+                    onChange={(event) => updateCallbackField("phone", event.target.value)}
+                    placeholder="98765 43210"
+                    className="h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
+                    aria-invalid={Boolean(callbackErrors.phone)}
+                  />
+                  {callbackErrors.phone ? <p className="text-xs text-rose-600">{callbackErrors.phone}</p> : null}
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="callback-company" className="text-sm font-semibold text-slate-700">Company <span className="font-normal text-slate-400">(optional)</span></Label>
+                  <Input
+                    id="callback-company"
+                    value={callbackForm.company}
+                    onChange={(event) => updateCallbackField("company", event.target.value)}
+                    placeholder="Company name"
+                    className="h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
+                    aria-invalid={Boolean(callbackErrors.company)}
+                  />
+                  {callbackErrors.company ? <p className="text-xs text-rose-600">{callbackErrors.company}</p> : null}
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="callback-requirements" className="text-sm font-semibold text-slate-700">Requirements*</Label>
+                  <Textarea
+                    id="callback-requirements"
+                    value={callbackForm.requirements}
+                    onChange={(event) => updateCallbackField("requirements", event.target.value)}
+                    placeholder="Tell us what you want help implementing from this report."
+                    className="min-h-28 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
+                    aria-invalid={Boolean(callbackErrors.requirements)}
+                  />
+                  {callbackErrors.requirements ? <p className="text-xs text-rose-600">{callbackErrors.requirements}</p> : null}
+                </div>
+
+                <div className="rounded-2xl border border-slate-300 bg-slate-100 p-4 text-xs leading-6 text-slate-700 sm:col-span-2">
+                  Report context included: {displayHost} · {scanScope.label}
+                </div>
+
+                <TurnstileWidget
+                  key={callbackCaptchaKey}
+                  value={callbackCaptchaToken}
+                  onChange={(token) => {
+                    setCallbackCaptchaToken(token);
+                    if (token) setCallbackCaptchaError(null);
+                  }}
+                  error={callbackCaptchaError}
+                  className="sm:col-span-2"
+                />
+              </div>
+
+              {callbackNotice ? (
+                <div className={`mx-6 rounded-2xl border px-4 py-3 text-sm leading-6 sm:mx-8 ${
+                  callbackNotice.startsWith("Thanks") || callbackNotice.startsWith("Your request was saved")
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-rose-200 bg-rose-50 text-rose-700"
+                }`}>
+                  {callbackNotice}
+                </div>
+              ) : null}
+
+              <DialogFooter className="mt-6 gap-3 border-t border-slate-100 bg-slate-50 px-6 py-5 sm:px-8">
+                <Button variant="outline" onClick={() => setCallbackOpen(false)} disabled={callbackSubmitting}>
+                  Close
+                </Button>
+                <Button onClick={handleSubmitCallbackRequest} disabled={callbackSubmitting || callbackSubmitted}>
+                  {callbackSubmitting ? "Submitting..." : callbackSubmitted ? "Request submitted" : "Submit request"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </DialogFooter>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={recentReportDialogOpen} onOpenChange={setRecentReportDialogOpen}>
+        <DialogContent className="overflow-hidden border-white/10 bg-[#11162a] p-0 text-white shadow-[0_30px_100px_rgba(0,0,0,0.5)] sm:max-w-lg">
+          <div className="relative p-6 sm:p-8">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.2),transparent_42%)]" />
+            <div className="relative">
+              <DialogHeader>
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-200">
+                  <CheckCircle2 className="h-7 w-7" />
+                </div>
+                <DialogTitle className="text-2xl font-semibold tracking-tight text-white">
+                  Recent report already available
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-sm leading-7 text-white/70">
+                  {rescanMessage ??
+                    `This website was already scanned within the last ${REPORT_CACHE_HOURS} hours. We're showing the latest report instead of running the same scan again.`}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-100">
+                No new scan was started, so no extra report credit was used.
+              </div>
+
+              <DialogFooter className="mt-6 gap-3 sm:justify-start">
+                {recentReportTarget?.id && (
+                  <Button
+                    onClick={() => {
+                      const target = recentReportTarget;
+                      setRecentReportDialogOpen(false);
+                      const from = `${location.pathname}${location.search}`;
+                      navigate(`/report?reportId=${encodeURIComponent(String(target.id))}`, {
+                        state: { from, report: target },
+                      });
+                    }}
+                  >
+                    View Latest Report
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setRecentReportDialogOpen(false)}>
+                  {recentReportTarget?.id ? "Stay Here" : "Got It"}
+                </Button>
+              </DialogFooter>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ScanningModal
         open={scanningModalOpen}
         onOpenChange={setScanningModalOpen}
@@ -3344,11 +4361,4 @@ export function ReportPage() {
     </>
   );
 }
-
-
-
-
-
-
-
 

@@ -5,7 +5,7 @@ import { DashboardLayout } from "./components/dashboard/dashboard-layout";
 import { Overview } from "./components/dashboard/overview";
 import { MyWebsites } from "./components/dashboard/my-websites";
 import { ReportComparisonPage } from "./components/dashboard/report-comparison-page";
-import { Subscription } from "./components/dashboard/subscription";
+import { CreditsBilling } from "./components/dashboard/credits-billing";
 import { ProfileSettings } from "./components/dashboard/profile-settings";
 import { Integrations } from "./components/dashboard/integrations";
 import { ProtectedRoute } from "./components/protected-route";
@@ -74,8 +74,8 @@ export const router = createBrowserRouter([
             element: <ReportComparisonPage />,
           },
           {
-            path: "subscription",
-            element: <Subscription />,
+            path: "credits",
+            element: <CreditsBilling />,
           },
           {
             path: "settings",

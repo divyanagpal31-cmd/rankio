@@ -69,6 +69,9 @@ export function MyWebsites() {
   const location = useLocation();
   const [isScanning, setIsScanning] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [recentReportDialogOpen, setRecentReportDialogOpen] = useState(false);
+  const [recentReportTarget, setRecentReportTarget] = useState<{ id: string; report?: any } | null>(null);
   const [viewingReportFor, setViewingReportFor] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [newWebsiteUrl, setNewWebsiteUrl] = useState("");
@@ -119,14 +122,18 @@ export function MyWebsites() {
     if (!user) return;
     setIsScanning(id);
     setActionError(null);
+    setActionMessage(null);
+    setRecentReportTarget(null);
+    setRecentReportDialogOpen(false);
 
     const website = websites.find((item) => item.id === id) as any;
     if (website?.latest_report_id && isFreshReport(website.latest_report_at)) {
-      const from = `${location.pathname}${location.search}`;
+      setActionMessage(
+        "This website was already scanned within the last 24 hours. We're showing the latest report instead of running the same scan again."
+      );
+      setRecentReportTarget({ id: String(website.latest_report_id) });
+      setRecentReportDialogOpen(true);
       setIsScanning(null);
-      navigate(`/report?reportId=${encodeURIComponent(website.latest_report_id)}`, {
-        state: { from },
-      });
       return;
     }
 
@@ -154,6 +161,17 @@ export function MyWebsites() {
     } else {
       refetch();
       const from = `${location.pathname}${location.search}`;
+      if (data?.cached) {
+        setActionMessage(
+          "This website was already scanned within the last 24 hours. We're showing the latest report instead of running the same scan again."
+        );
+        setRecentReportTarget(data?.id ? { id: String(data.id), report: data } : null);
+        setRecentReportDialogOpen(true);
+        setScanningModalOpen(false);
+        setScanComplete(false);
+        setIsScanning(null);
+        return;
+      }
       setScanComplete(true);
       await new Promise((resolve) => window.setTimeout(resolve, SCAN_COMPLETE_DELAY_MS));
       setScanningModalOpen(false);
@@ -188,6 +206,7 @@ export function MyWebsites() {
     setAdding(true);
     setNewWebsiteError(null);
     setActionError(null);
+    setActionMessage(null);
     setScanComplete(false);
 
     const normalized = normalizeWebsiteInput(newWebsiteUrl);
@@ -263,6 +282,7 @@ export function MyWebsites() {
       .from("reports")
       .select("id, generated_at")
       .eq("website_id", websiteId)
+      .eq("status", "completed")
       .order("generated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -306,6 +326,7 @@ export function MyWebsites() {
       .from("reports")
       .select("id, website_id, status, ai_score, performance_score, seo_score, technical_score, raw_scan_data, recommendations, generated_at, report_level, is_cached")
       .eq("website_id", website.id)
+      .eq("status", "completed")
       .order("generated_at", { ascending: false })
       .limit(20);
 
@@ -538,6 +559,7 @@ export function MyWebsites() {
             setNewWebsiteUrl("");
             setNewWebsiteError(null);
             setActionError(null);
+            setActionMessage(null);
             setAddOpen(true);
           }}
           disabled={!user}
@@ -1203,6 +1225,40 @@ export function MyWebsites() {
             >
               Open Detail Page
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={recentReportDialogOpen} onOpenChange={setRecentReportDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+              <CheckCircle className="h-6 w-6" />
+            </div>
+            <DialogTitle>Recent report already available</DialogTitle>
+            <DialogDescription className="leading-6">
+              {actionMessage ??
+                "This website was already scanned within the last 24 hours. We're showing the latest report instead of running the same scan again."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+            No new scan was started, so no extra report credit was used.
+          </div>
+          <DialogFooter className="gap-3">
+            <Button variant="outline" onClick={() => setRecentReportDialogOpen(false)}>
+              Stay Here
+            </Button>
+            {recentReportTarget?.id && (
+              <Button
+                onClick={() => {
+                  const target = recentReportTarget;
+                  setRecentReportDialogOpen(false);
+                  openReportUrl(String(target.id), false, target.report);
+                }}
+              >
+                View Latest Report
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

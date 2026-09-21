@@ -14,7 +14,7 @@ export function Pricing() {
   const navigate = useNavigate();
 
   const handleCheckout = (planId: "starter" | "growth") => {
-    const target = `/dashboard/subscription?plan=${planId}`;
+    const target = `/dashboard/credits?plan=${planId}`;
     if (user) {
       navigate(target);
       return;
@@ -36,10 +36,10 @@ export function Pricing() {
               <span className="bg-gradient-to-r from-[#5d67dc] via-[#4046a9] to-[#242840] bg-clip-text text-transparent">
                 Pay Per Report,
               </span>{" "}
-              <span className="text-[#242840]">No Subscriptions</span>
+              <span className="text-[#242840]">No Monthly Fees</span>
             </h2>
             <p className="mt-4 text-base leading-7 text-slate-500 md:text-lg">
-              Purchase only the reports you need. No subscriptions, no hidden fees—just professional AI Visibility Reports with actionable recommendations for every website you analyze.
+              Purchase only the reports you need. No recurring charges, no hidden fees—just professional AI Visibility Reports with actionable recommendations for every website you analyze.
             </p>
           </div>
 
@@ -104,7 +104,7 @@ export function Pricing() {
           </div>
 
           <p className="mt-10 text-center text-sm text-slate-400">
-            No recurring subscriptions • Industry-specific AI analysis • Actionable recommendations, not just scores • Professional reports you can share with your team
+            No recurring charges • Industry-specific AI analysis • Actionable recommendations, not just scores • Professional reports you can share with your team
           </p>
         </div>
       </section>

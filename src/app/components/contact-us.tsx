@@ -10,6 +10,7 @@ import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 import { submitContactMessage } from "../services/contact-service";
+import { TurnstileWidget, isCaptchaEnabled } from "./turnstile-widget";
 
 const helpTopics = [
   {
@@ -120,6 +121,9 @@ export function ContactUs() {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [notice, setNotice] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaError, setCaptchaError] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
 
   const updateField = <K extends keyof typeof initialFormState>(field: K, value: (typeof initialFormState)[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -135,6 +139,15 @@ export function ContactUs() {
       return;
     }
 
+    if (isCaptchaEnabled() && !captchaToken) {
+      setCaptchaError("Please complete the CAPTCHA verification.");
+      setStatus("error");
+      setNotice("Please complete the CAPTCHA and try again.");
+      return;
+    }
+
+    setCaptchaError(null);
+
     setSubmitting(true);
     setStatus("idle");
     setNotice("");
@@ -145,6 +158,7 @@ export function ContactUs() {
       website: normalizeWebsiteUrl(form.websiteUrl),
       reason: form.reason,
       message: form.message.trim(),
+      captchaToken,
     });
 
     setSubmitting(false);
@@ -152,6 +166,8 @@ export function ContactUs() {
     if (result.error) {
       setStatus("error");
       setNotice(result.error);
+      setCaptchaToken("");
+      setCaptchaKey((current) => current + 1);
       return;
     }
 
@@ -159,6 +175,9 @@ export function ContactUs() {
     setNotice("Thank you for contacting us. We typically respond within 1 business day.");
     setForm(initialFormState);
     setErrors({});
+    setCaptchaToken("");
+    setCaptchaError(null);
+    setCaptchaKey((current) => current + 1);
   };
 
   return (
@@ -347,6 +366,16 @@ export function ContactUs() {
                     />
                     {errors.message ? <p className="text-sm text-rose-600">{errors.message}</p> : null}
                   </div>
+
+                  <TurnstileWidget
+                    key={captchaKey}
+                    value={captchaToken}
+                    onChange={(token) => {
+                      setCaptchaToken(token);
+                      if (token) setCaptchaError(null);
+                    }}
+                    error={captchaError}
+                  />
 
                   <Button type="submit" className="h-12 w-full text-base" disabled={submitting}>
                     {submitting ? "Sending..." : "Send Message"}

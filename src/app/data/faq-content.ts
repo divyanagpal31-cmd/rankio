@@ -33,9 +33,9 @@ export const billingFaqs = [
       "A single Rankio AI Visibility Report is currently priced at $9.99 USD. Any available report bundles or additional plans are displayed on our Pricing page and at checkout.",
   },
   {
-    question: "Do I need a subscription to use Rankio?",
+    question: "Do I need a monthly plan to use Rankio?",
     answer:
-      "No. Rankio's report model is based on one-time purchases. You pay for the report you need without committing to a recurring subscription.",
+      "No. Rankio's report model is based on one-time purchases. You pay for the report you need without committing to recurring billing.",
   },
   {
     question: "What is included in the AI Visibility Report?",

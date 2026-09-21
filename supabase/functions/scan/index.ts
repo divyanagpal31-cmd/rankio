@@ -2,9 +2,9 @@ import { serve } from "https://deno.land/std@0.210.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const scanVersion = "2026-06-09-architecture-v1";
-const crawlerVersion = "2026-06-09-crawler-v1";
+const crawlerVersion = "2026-09-19-ai-robots-access-v1";
 const psiVersion = "pagespeedonline/v5";
-const crawlLimit = 5;
+const crawlLimit = 12;
 const requestTimeoutMs = 12000;
 
 const corsHeaders = {
@@ -49,7 +49,61 @@ type SubscriptionRow = {
   lifetime_access?: boolean | null;
 };
 
-type PageSnapshot = {
+type SchemaValidationIssue = {
+  severity: "error" | "warning";
+  message: string;
+};
+
+type SchemaValidationItem = {
+  type: string;
+  valid: boolean;
+  issues: SchemaValidationIssue[];
+};
+
+type SchemaValidationSummary = {
+  itemCount: number;
+  validItemCount: number;
+  errorCount: number;
+  warningCount: number;
+  syntaxErrorCount: number;
+  items: SchemaValidationItem[];
+};
+type TopicCluster = {
+  topic: string;
+  keywords: string[];
+  pageCount: number;
+  pages: string[];
+  score: number;
+};
+
+type TopicAnalysis = {
+  totalKeywords: number;
+  clusters: TopicCluster[];
+  thinTopics: string[];
+};
+type NapPageSignals = {
+  businessName: string | null;
+  address: string | null;
+  phone: string | null;
+};
+
+type NapFieldSummary = {
+  values: string[];
+  pageCount: number;
+  consistent: boolean;
+};
+
+type NapConsistency = {
+  detected: boolean;
+  pagesChecked: number;
+  inconsistentFields: string[];
+  fields: {
+    businessName: NapFieldSummary;
+    address: NapFieldSummary;
+    phone: NapFieldSummary;
+  };
+  confidence: number;
+};type PageSnapshot = {
   url: string;
   canonicalUrl: string | null;
   statusCode: number | null;
@@ -61,6 +115,8 @@ type PageSnapshot = {
   internalLinksOut: number;
   internalLinksIn: number;
   schemaTypes: string[];
+  schemaValidation: SchemaValidationSummary;
+  napSignals: NapPageSignals;
   pageScore: number;
   rawMeta: Record<string, unknown>;
   headings: string[];
@@ -82,11 +138,23 @@ type PageSnapshot = {
   links: string[];
 };
 
+type AiCrawlerAccess = {
+  status: "allowed" | "partially_blocked" | "blocked" | "unknown";
+  checkedAgents: string[];
+  blockedAgents: string[];
+  partiallyBlockedAgents: string[];
+  allowedAgents: string[];
+  summary: string;
+};
 type DiscoveryResult = {
   robotsTxt: string | null;
   sitemapUrls: string[];
+  aiCrawlerAccess: AiCrawlerAccess;
   sitemapDiscoveredUrls: string[];
   pageSnapshots: PageSnapshot[];
+  schemaValidation: SchemaValidationSummary;
+  topicAnalysis: TopicAnalysis;
+  napConsistency: NapConsistency;
   brokenLinks: Array<{ url: string; statusCode: number | null; sourceUrl: string | null }>;
   entityEnrichment: {
     brandName: string | null;
@@ -139,6 +207,109 @@ function stripMarkdownLinks(value: string): string {
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+
+
+async function logAdminError(
+  supabase: any,
+  entry: {
+    source: string;
+    severity?: "info" | "warning" | "error" | "critical";
+    code?: string;
+    message: string;
+    details?: Record<string, unknown>;
+    userId?: string | null;
+    reportId?: string | null;
+    websiteUrl?: string | null;
+  },
+) {
+  try {
+    await supabase.from("admin_error_logs").insert({
+      source: entry.source,
+      severity: entry.severity ?? "error",
+      code: entry.code ?? null,
+      message: entry.message,
+      details: entry.details ?? {},
+      user_id: entry.userId ?? null,
+      report_id: entry.reportId ?? null,
+      website_url: entry.websiteUrl ?? null,
+    });
+  } catch (error) {
+    console.error("admin error log insert failed", error);
+  }
+}
+
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || "unknown";
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+type RateLimitRule = {
+  action: string;
+  identifier: string;
+  identifierHint?: string;
+  limit: number;
+  windowSeconds: number;
+};
+
+type RateLimitResult = {
+  allowed: boolean;
+  limit?: number;
+  remaining?: number;
+  retryAfterSeconds?: number;
+};
+
+async function checkRateLimit(supabase: any, rule: RateLimitRule): Promise<RateLimitResult> {
+  const identifier = String(rule.identifier ?? "").trim().toLowerCase();
+  if (!identifier) return { allowed: true };
+
+  try {
+    const identifierHash = await sha256Hex(`${rule.action}:${identifier}`);
+    const since = new Date(Date.now() - rule.windowSeconds * 1000).toISOString();
+    const { count, error } = await supabase
+      .from("public_rate_limit_events")
+      .select("id", { count: "exact", head: true })
+      .eq("action", rule.action)
+      .eq("identifier_hash", identifierHash)
+      .gte("created_at", since);
+
+    if (error) {
+      console.error("rate limit lookup failed", error);
+      return { allowed: true };
+    }
+
+    const used = count ?? 0;
+    if (used >= rule.limit) {
+      return { allowed: false, limit: rule.limit, remaining: 0, retryAfterSeconds: rule.windowSeconds };
+    }
+
+    await supabase.from("public_rate_limit_events").insert({
+      action: rule.action,
+      identifier_hash: identifierHash,
+      identifier_hint: rule.identifierHint?.slice(0, 120) ?? null,
+    });
+
+    return { allowed: true, limit: rule.limit, remaining: Math.max(rule.limit - used - 1, 0) };
+  } catch (error) {
+    console.error("rate limit failed", error);
+    return { allowed: true };
+  }
+}
+
+async function checkRateLimits(supabase: any, rules: RateLimitRule[]): Promise<RateLimitResult> {
+  for (const rule of rules) {
+    const result = await checkRateLimit(supabase, rule);
+    if (!result.allowed) return result;
+  }
+  return { allowed: true };
 }
 
 function isUuid(value: string): boolean {
@@ -434,6 +605,91 @@ function extractSchemaTypes(html: string): string[] {
   return Array.from(types);
 }
 
+function validateSchemaMarkup(html: string): SchemaValidationSummary {
+  const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  const items: SchemaValidationItem[] = [];
+  let syntaxErrorCount = 0;
+  let match: RegExpExecArray | null;
+
+  const hasValue = (record: Record<string, unknown>, key: string) => {
+    const value = record[key];
+    return value !== undefined && value !== null && value !== "" && (!Array.isArray(value) || value.length > 0);
+  };
+
+  const addItem = (record: Record<string, unknown>) => {
+    const rawType = record["@type"];
+    const type = Array.isArray(rawType) ? String(rawType[0] ?? "Thing") : String(rawType ?? "Thing");
+    const issues: SchemaValidationIssue[] = [];
+    const requireFields = (fields: string[]) => {
+      for (const field of fields) {
+        if (!hasValue(record, field)) issues.push({ severity: "error", message: `Missing required property: ${field}` });
+      }
+    };
+
+    if (!rawType) issues.push({ severity: "error", message: "Missing required property: @type" });
+    if (/Organization|Corporation|Brand|WebSite|WebPage|LocalBusiness|Person/i.test(type)) requireFields(["name"]);
+    if (/Organization|Corporation|Brand|WebSite|WebPage/i.test(type) && !hasValue(record, "url")) {
+      issues.push({ severity: "warning", message: "Recommended property is missing: url" });
+    }
+    if (/Article|BlogPosting|NewsArticle/i.test(type)) requireFields(["headline", "author"]);
+    if (/Product/i.test(type)) requireFields(["name", "image", "offers"]);
+    if (/Offer/i.test(type)) requireFields(["price", "priceCurrency"]);
+    if (/LocalBusiness/i.test(type)) requireFields(["address"]);
+    if (/FAQPage/i.test(type)) {
+      if (!Array.isArray(record.mainEntity) || record.mainEntity.length === 0) {
+        issues.push({ severity: "error", message: "Missing required property: mainEntity" });
+      } else {
+        for (const question of record.mainEntity.slice(0, 20)) {
+          if (!question || typeof question !== "object") continue;
+          const questionRecord = question as Record<string, unknown>;
+          if (!hasValue(questionRecord, "name")) issues.push({ severity: "error", message: "FAQ Question is missing: name" });
+          const answer = questionRecord.acceptedAnswer;
+          if (!answer || typeof answer !== "object" || !hasValue(answer as Record<string, unknown>, "text")) {
+            issues.push({ severity: "error", message: "FAQ Question is missing: acceptedAnswer.text" });
+          }
+        }
+      }
+    }
+    if (/BreadcrumbList/i.test(type) && (!Array.isArray(record.itemListElement) || record.itemListElement.length === 0)) {
+      issues.push({ severity: "error", message: "Missing required property: itemListElement" });
+    }
+
+    items.push({ type, valid: !issues.some((issue) => issue.severity === "error"), issues });
+  };
+
+  while ((match = regex.exec(html))) {
+    const raw = match[1]?.trim();
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      const roots = Array.isArray(parsed) ? parsed : [parsed];
+      for (const root of roots) {
+        if (!root || typeof root !== "object") continue;
+        const record = root as Record<string, unknown>;
+        if (Array.isArray(record["@graph"])) {
+          for (const item of record["@graph"] as unknown[]) {
+            if (item && typeof item === "object") addItem(item as Record<string, unknown>);
+          }
+        } else {
+          addItem(record);
+        }
+      }
+    } catch {
+      syntaxErrorCount += 1;
+    }
+  }
+
+  const errorCount = syntaxErrorCount + items.reduce((sum, item) => sum + item.issues.filter((issue) => issue.severity === "error").length, 0);
+  const warningCount = items.reduce((sum, item) => sum + item.issues.filter((issue) => issue.severity === "warning").length, 0);
+  return {
+    itemCount: items.length,
+    validItemCount: items.filter((item) => item.valid).length,
+    errorCount,
+    warningCount,
+    syntaxErrorCount,
+    items: items.slice(0, 30),
+  };
+}
 function extractJsonLdEntities(html: string): Array<Record<string, unknown>> {
   const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   const entities: Array<Record<string, unknown>> = [];
@@ -512,16 +768,100 @@ function extractExternalEntitySources(html: string, baseUrl: string) {
   for (const entity of entities) visit(entity);
 
   return {
-    rendering: {
-      enabled: renderedPages > 0,
-      pagesRendered: renderedPages,
-    },
     brandName: Array.from(brandNames)[0] ?? null,
     publisherName: Array.from(publisherNames)[0] ?? null,
     sameAsUrls: Array.from(sameAsUrls),
   };
 }
 
+function normalizeNapValue(value: string | null): string | null {
+  if (!value) return null;
+  const normalized = value.toLowerCase().replace(/[\u00a0\s]+/g, " ").replace(/[.,;:|]+/g, " ").trim();
+  return normalized || null;
+}
+
+function normalizeNapPhone(value: string | null): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 ? (digits.length > 10 ? digits.slice(-10) : digits) : null;
+}
+
+function extractNapSignals(html: string): NapPageSignals {
+  const entities = extractJsonLdEntities(html);
+  let businessName: string | null = null;
+  let address: string | null = null;
+  let phone: string | null = null;
+
+  const visit = (value: unknown) => {
+    if (!value || (businessName && address && phone)) return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    const type = String(record["@type"] ?? "");
+    if (!businessName && /Organization|Corporation|Brand|LocalBusiness/i.test(type) && typeof record.name === "string") {
+      businessName = record.name.trim() || null;
+    }
+    if (!phone && /Organization|Corporation|Brand|LocalBusiness/i.test(type) && typeof record.telephone === "string") {
+      phone = normalizeNapPhone(record.telephone);
+    }
+    const rawAddress = record.address;
+    if (!address && rawAddress && typeof rawAddress === "object") {
+      const addressRecord = rawAddress as Record<string, unknown>;
+      const parts = ["streetAddress", "addressLocality", "addressRegion", "postalCode", "addressCountry"]
+        .map((key) => addressRecord[key])
+        .filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+      if (parts.length > 0) address = normalizeNapValue(parts.join(", "));
+    } else if (!address && typeof rawAddress === "string") {
+      address = normalizeNapValue(rawAddress);
+    }
+    visit(record["@graph"]);
+    visit(record.publisher);
+    visit(record.parentOrganization);
+  };
+
+  for (const entity of entities) visit(entity);
+  const telMatch = html.match(/href=["']tel:([^"']+)["']/i);
+  if (!phone && telMatch?.[1]) phone = normalizeNapPhone(telMatch[1]);
+  if (!businessName) {
+    const siteName = readMetaTag(html, "og:site_name");
+    businessName = normalizeNapValue(siteName);
+  }
+  return {
+    businessName: normalizeNapValue(businessName),
+    address,
+    phone,
+  };
+}
+
+function buildNapConsistency(pages: PageSnapshot[]): NapConsistency {
+  const fieldNames = ["businessName", "address", "phone"] as const;
+  const fields = Object.fromEntries(fieldNames.map((field) => {
+    const values = new Set<string>();
+    let pageCount = 0;
+    for (const page of pages) {
+      const value = page.napSignals[field];
+      if (value) {
+        values.add(value);
+        pageCount += 1;
+      }
+    }
+    return [field, { values: Array.from(values).slice(0, 8), pageCount, consistent: values.size <= 1 }];
+  })) as NapConsistency["fields"];
+
+  const inconsistentFields = fieldNames.filter((field) => !fields[field].consistent);
+  const detected = fieldNames.some((field) => fields[field].pageCount > 0);
+  const fieldsWithSignals = fieldNames.filter((field) => fields[field].pageCount > 0).length;
+  return {
+    detected,
+    pagesChecked: pages.length,
+    inconsistentFields,
+    fields,
+    confidence: detected ? Math.round((fieldsWithSignals / fieldNames.length) * 100) : 0,
+  };
+}
 function extractImages(html: string) {
   const regex = /<img[^>]*>/gi;
   let match: RegExpExecArray | null;
@@ -580,6 +920,87 @@ function deriveEntityTags(page: PageSnapshot): string[] {
   return Array.from(tags).slice(0, 8);
 }
 
+const keywordStopWords = new Set([
+  "about", "after", "again", "also", "among", "being", "between", "could", "from",
+  "have", "into", "more", "most", "other", "over", "same", "some", "such", "than",
+  "that", "their", "there", "these", "they", "this", "through", "using", "what",
+  "when", "where", "which", "with", "your", "website", "page", "pages", "home",
+  "here", "will", "would", "should", "shall", "very", "just", "only", "each",
+  "make", "made", "does", "doing", "done", "can", "our", "you", "are", "for",
+  "and", "the", "how", "why", "not", "but", "its", "all", "any", "has", "had",
+]);
+
+function extractPageKeywords(page: PageSnapshot): Map<string, number> {
+  const counts = new Map<string, number>();
+  const source = [page.title ?? "", page.headings.join(" "), page.text].join(" ").toLowerCase();
+  const tokens = source.match(/[a-z][a-z0-9-]{3,}/g) ?? [];
+  for (const token of tokens) {
+    const keyword = token.replace(/^-+|-+$/g, "");
+    if (!keyword || keywordStopWords.has(keyword) || /^\d+$/.test(keyword)) continue;
+    counts.set(keyword, (counts.get(keyword) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function buildTopicAnalysis(pages: PageSnapshot[]): TopicAnalysis {
+  const keywordCounts = new Map<string, number>();
+  const keywordPages = new Map<string, Set<string>>();
+
+  for (const page of pages) {
+    const pageKeywords = extractPageKeywords(page);
+    for (const [keyword, count] of pageKeywords) {
+      keywordCounts.set(keyword, (keywordCounts.get(keyword) ?? 0) + count);
+      const urls = keywordPages.get(keyword) ?? new Set<string>();
+      urls.add(page.url);
+      keywordPages.set(keyword, urls);
+    }
+  }
+
+  const candidates = Array.from(keywordCounts.keys())
+    .filter((keyword) => (keywordPages.get(keyword)?.size ?? 0) > 0)
+    .sort((left, right) => {
+      const pageDelta = (keywordPages.get(right)?.size ?? 0) - (keywordPages.get(left)?.size ?? 0);
+      return pageDelta || (keywordCounts.get(right) ?? 0) - (keywordCounts.get(left) ?? 0) || left.localeCompare(right);
+    })
+    .slice(0, 30);
+
+  const clusters: TopicCluster[] = [];
+  for (const keyword of candidates) {
+    const pagesForKeyword = keywordPages.get(keyword) ?? new Set<string>();
+    const matchingCluster = clusters.find((cluster) => {
+      const seedPages = keywordPages.get(cluster.keywords[0]) ?? new Set<string>();
+      const overlap = Array.from(pagesForKeyword).filter((url) => seedPages.has(url)).length;
+      return overlap / Math.max(1, Math.min(pagesForKeyword.size, seedPages.size)) >= 0.5;
+    });
+
+    if (matchingCluster && matchingCluster.keywords.length < 6) {
+      matchingCluster.keywords.push(keyword);
+      matchingCluster.pageCount = Math.max(matchingCluster.pageCount, pagesForKeyword.size);
+      matchingCluster.pages = Array.from(new Set([...matchingCluster.pages, ...pagesForKeyword])).slice(0, 3);
+      matchingCluster.score = Math.min(100, matchingCluster.pageCount * 20 + matchingCluster.keywords.length * 10);
+      continue;
+    }
+
+    clusters.push({
+      topic: keyword.charAt(0).toUpperCase() + keyword.slice(1),
+      keywords: [keyword],
+      pageCount: pagesForKeyword.size,
+      pages: Array.from(pagesForKeyword).slice(0, 3),
+      score: Math.min(100, pagesForKeyword.size * 20 + 10),
+    });
+  }
+
+  const thinTopics = clusters
+    .filter((cluster) => cluster.pageCount === 1 && cluster.keywords.length >= 2)
+    .map((cluster) => cluster.topic)
+    .slice(0, 8);
+
+  return {
+    totalKeywords: keywordCounts.size,
+    clusters: clusters.slice(0, 12),
+    thinTopics,
+  };
+}
 function scorePage(page: PageSnapshot): number {
   let score = 50;
   if (page.title) score += 10;
@@ -747,18 +1168,150 @@ async function enrichExternalProfiles(urls: string[]) {
   };
 }
 
+const aiCrawlerAgents = [
+  "GPTBot",
+  "ChatGPT-User",
+  "ClaudeBot",
+  "Claude-User",
+  "PerplexityBot",
+  "Google-Extended",
+  "CCBot",
+  "Applebot-Extended",
+];
+
+type RobotsRule = {
+  type: "allow" | "disallow";
+  path: string;
+};
+
+type RobotsGroup = {
+  userAgents: string[];
+  rules: RobotsRule[];
+};
+
+function createUnknownAiCrawlerAccess(): AiCrawlerAccess {
+  return {
+    status: "unknown",
+    checkedAgents: aiCrawlerAgents,
+    blockedAgents: [],
+    partiallyBlockedAgents: [],
+    allowedAgents: [],
+    summary: "Robots.txt was not found or could not be checked.",
+  };
+}
+
+function stripRobotsComment(line: string): string {
+  const hashIndex = line.indexOf("#");
+  return (hashIndex >= 0 ? line.slice(0, hashIndex) : line).trim();
+}
+
+function robotsPatternMatches(pattern: string, targetPath: string): boolean {
+  const cleaned = pattern.trim();
+  if (!cleaned) return false;
+  if (cleaned === "/") return true;
+
+  const endAnchored = cleaned.endsWith("$");
+  const body = endAnchored ? cleaned.slice(0, -1) : cleaned;
+  if (!body.includes("*")) {
+    return endAnchored ? targetPath === body : targetPath.startsWith(body);
+  }
+
+  const escaped = body
+    .split("*")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  const regex = new RegExp(`^${escaped}${endAnchored ? "$" : ""}`);
+  return regex.test(targetPath);
+}
+
+function selectRobotsRulesForAgent(groups: RobotsGroup[], agent: string): RobotsRule[] {
+  const agentLower = agent.toLowerCase();
+  let bestLength = -1;
+  let selected: RobotsRule[] = [];
+
+  for (const group of groups) {
+    for (const rawUserAgent of group.userAgents) {
+      const userAgent = rawUserAgent.toLowerCase();
+      const matches = userAgent === "*" || agentLower.includes(userAgent) || userAgent.includes(agentLower);
+      if (!matches) continue;
+      const specificity = userAgent === "*" ? 0 : userAgent.length;
+      if (specificity > bestLength) {
+        bestLength = specificity;
+        selected = group.rules;
+      } else if (specificity === bestLength) {
+        selected = [...selected, ...group.rules];
+      }
+    }
+  }
+
+  return selected;
+}
+
+function isRobotsPathBlockedForRules(path: string, rules: RobotsRule[]): boolean {
+  const matchingRules = rules.filter((rule) => rule.path && robotsPatternMatches(rule.path, path));
+  if (matchingRules.length === 0) return false;
+
+  matchingRules.sort((left, right) => right.path.length - left.path.length);
+  return matchingRules[0].type === "disallow";
+}
+
+function evaluateAiCrawlerAccess(robotsTxt: string | null, groups: RobotsGroup[]): AiCrawlerAccess {
+  if (!robotsTxt) return createUnknownAiCrawlerAccess();
+
+  const blockedAgents: string[] = [];
+  const partiallyBlockedAgents: string[] = [];
+  const allowedAgents: string[] = [];
+
+  for (const agent of aiCrawlerAgents) {
+    const rules = selectRobotsRulesForAgent(groups, agent);
+    const blocksEntireSite = isRobotsPathBlockedForRules("/", rules);
+    const hasPathBlocks = rules.some((rule) => rule.type === "disallow" && rule.path.trim() && rule.path.trim() !== "/");
+
+    if (blocksEntireSite) blockedAgents.push(agent);
+    else if (hasPathBlocks) partiallyBlockedAgents.push(agent);
+    else allowedAgents.push(agent);
+  }
+
+  const status: AiCrawlerAccess["status"] =
+    blockedAgents.length === aiCrawlerAgents.length
+      ? "blocked"
+      : blockedAgents.length > 0 || partiallyBlockedAgents.length > 0
+        ? "partially_blocked"
+        : "allowed";
+
+  const summary =
+    status === "blocked"
+      ? "Robots.txt appears to block common AI crawlers from the site."
+      : status === "partially_blocked"
+        ? "Robots.txt may limit access for some AI crawlers or site sections."
+        : "Robots.txt does not appear to block the common AI crawlers we checked.";
+
+  return {
+    status,
+    checkedAgents: aiCrawlerAgents,
+    blockedAgents,
+    partiallyBlockedAgents,
+    allowedAgents,
+    summary,
+  };
+}
 async function parseRobots(baseUrl: string) {
   const url = new URL("/robots.txt", baseUrl).toString();
   const result = await fetchText(url, 8000);
   if (!result.ok || !result.text) {
-    return { robotsTxt: null, sitemapUrls: [], disallowPaths: [] as string[] };
+    return { robotsTxt: null, sitemapUrls: [], disallowPaths: [] as string[], aiCrawlerAccess: createUnknownAiCrawlerAccess() };
   }
 
   const sitemapUrls: string[] = [];
   const disallowPaths: string[] = [];
+  const groups: RobotsGroup[] = [];
+  let currentGroup: RobotsGroup | null = null;
+  let currentGroupHasRules = false;
+
   for (const rawLine of result.text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
+    const line = stripRobotsComment(rawLine);
+    if (!line) continue;
+
     const sitemapMatch = line.match(/^sitemap:\s*(.+)$/i);
     if (sitemapMatch?.[1]) {
       try {
@@ -768,14 +1321,62 @@ async function parseRobots(baseUrl: string) {
       }
       continue;
     }
-    const disallowMatch = line.match(/^disallow:\s*(.+)$/i);
-    if (disallowMatch?.[1]) {
-      disallowPaths.push(disallowMatch[1].trim());
+
+    const userAgentMatch = line.match(/^user-agent:\s*(.+)$/i);
+    if (userAgentMatch?.[1]) {
+      if (!currentGroup || currentGroupHasRules) {
+        currentGroup = { userAgents: [], rules: [] };
+        groups.push(currentGroup);
+        currentGroupHasRules = false;
+      }
+      currentGroup.userAgents.push(userAgentMatch[1].trim());
+      continue;
+    }
+
+    const allowMatch = line.match(/^allow:\s*(.*)$/i);
+    const disallowMatch = line.match(/^disallow:\s*(.*)$/i);
+    if (allowMatch || disallowMatch) {
+      if (!currentGroup) {
+        currentGroup = { userAgents: ["*"], rules: [] };
+        groups.push(currentGroup);
+      }
+
+      const ruleType: RobotsRule["type"] = allowMatch ? "allow" : "disallow";
+      const rulePath = String((allowMatch?.[1] ?? disallowMatch?.[1] ?? "")).trim();
+      currentGroupHasRules = true;
+      if (rulePath) {
+        currentGroup.rules.push({ type: ruleType, path: rulePath });
+        if (ruleType === "disallow") disallowPaths.push(rulePath);
+      }
     }
   }
-  return { robotsTxt: result.text, sitemapUrls: Array.from(new Set(sitemapUrls)), disallowPaths };
+
+  return {
+    robotsTxt: result.text,
+    sitemapUrls: Array.from(new Set(sitemapUrls)),
+    disallowPaths,
+    aiCrawlerAccess: evaluateAiCrawlerAccess(result.text, groups),
+  };
+}
+function isLikelyContentPageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.toLowerCase();
+    if (/\.(xml|txt|json|rss|atom|pdf|zip|gz|jpg|jpeg|png|gif|webp|svg|ico|css|js|map|mp4|webm|mp3|wav|woff|woff2|ttf|eot)$/i.test(pathname)) return false;
+    if (/(^|\/)(sitemap|feed|rss|atom)([-_a-z0-9]*)?\.(xml|txt|json)$/i.test(pathname)) return false;
+    if (/(^|\/)(sitemap|feed|rss|atom)(\/|$)/i.test(pathname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
+function isLikelyHtmlResponse(contentType: string | null, html: string): boolean {
+  const normalized = String(contentType ?? "").toLowerCase();
+  if (normalized.includes("text/html") || normalized.includes("application/xhtml+xml")) return true;
+  if (normalized.includes("xml") || normalized.includes("json") || normalized.includes("text/plain")) return false;
+  return /<!doctype\s+html|<html[\s>]/i.test(html);
+}
 function parseSitemapUrls(xml: string, baseUrl: string): string[] {
   const urls: string[] = [];
   const regex = /<loc>([^<]+)<\/loc>/gi;
@@ -804,6 +1405,15 @@ function collectInternalLinkCandidates(pages: PageSnapshot[], origin: string): s
   return Array.from(candidates);
 }
 
+function isPathDisallowed(url: string, disallowPaths: string[]): boolean {
+  try {
+    const pathname = new URL(url).pathname;
+    return disallowPaths.some((path) => path && pathname.startsWith(path));
+  } catch {
+    return false;
+  }
+}
+
 async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
   const origin = new URL(normalizedUrl).origin;
   const discoveryNotes: string[] = [];
@@ -819,6 +1429,9 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
 
   const homepageRendered = renderLayerEnabled ? await fetchRenderedPage(normalizedUrl) : null;
   const homepageHtml = homepageRendered?.html?.trim() ? homepageRendered.html : homepageResult.text;
+  if (!isLikelyContentPageUrl(normalizedUrl) || !isLikelyHtmlResponse(homepageRendered?.contentType ?? homepageResult.contentType, homepageHtml)) {
+    throw new Error("The submitted URL does not appear to be a readable website page.");
+  }
   const homepageTitle = extractTitle(homepageHtml);
   const homepageCanonical = readCanonical(homepageHtml, normalizedUrl);
   const homepageMetaDescription = readMetaTag(homepageHtml, "description");
@@ -827,6 +1440,7 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
   const homepageHeadingsH1 = extractHeadings(homepageHtml, "h1");
   const homepageHeadingsH2 = extractHeadings(homepageHtml, "h2");
   const homepageSchemaTypes = extractSchemaTypes(homepageHtml);
+  const homepageSchemaValidation = validateSchemaMarkup(homepageHtml);
   const homepageHreflangLinks = extractHreflangLinks(homepageHtml, normalizedUrl);
   const homepageEntitySources = extractExternalEntitySources(homepageHtml, normalizedUrl);
   const homepageWordData = extractWordCount(homepageHtml);
@@ -846,6 +1460,8 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
     internalLinksOut: homepageLinks.length,
     internalLinksIn: 0,
     schemaTypes: homepageSchemaTypes,
+    schemaValidation: homepageSchemaValidation,
+    napSignals: extractNapSignals(homepageHtml),
     pageScore: 0,
     rawMeta: {
       contentType: homepageResult.contentType,
@@ -872,9 +1488,13 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
   const robots = await parseRobots(normalizedUrl);
   if (robots.robotsTxt) discoveryNotes.push("Robots.txt discovered");
   if (robots.sitemapUrls.length > 0) discoveryNotes.push(`Sitemaps discovered: ${robots.sitemapUrls.length}`);
+  else discoveryNotes.push("Default sitemap.xml checked");
 
+  const sitemapHints = robots.sitemapUrls.length > 0
+    ? robots.sitemapUrls
+    : [new URL("/sitemap.xml", normalizedUrl).toString()];
   const sitemapUrls: string[] = [];
-  for (const sitemapUrl of robots.sitemapUrls.slice(0, 3)) {
+  for (const sitemapUrl of sitemapHints.slice(0, 3)) {
     const sitemapResult = await fetchText(sitemapUrl, 8000);
     if (!sitemapResult.ok || !sitemapResult.text) continue;
     const discovered = parseSitemapUrls(sitemapResult.text, normalizedUrl);
@@ -887,17 +1507,24 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
   const candidateUrls = [
     normalizedUrl,
     ...uniqueSitemapUrls,
-    ...homepage.links.slice(0, 4),
+    ...homepage.links,
   ]
     .filter((url) => isLikelyInternalLink(url, origin))
+    .filter((url) => isLikelyContentPageUrl(url))
+    .filter((url) => !isPathDisallowed(url, robots.disallowPaths))
     .filter((url) => !pageMap.has(url));
 
-  for (const url of candidateUrls.slice(0, crawlLimit - 1)) {
+  const crawlQueue = Array.from(new Set(candidateUrls));
+  const queuedUrls = new Set(crawlQueue);
+  while (crawlQueue.length > 0 && pageMap.size < crawlLimit) {
+    const url = crawlQueue.shift();
+    if (!url || pageMap.has(url) || !isLikelyContentPageUrl(url) || isPathDisallowed(url, robots.disallowPaths)) continue;
     const renderedPage = renderLayerEnabled ? await fetchRenderedPage(url) : null;
     const result = await fetchText(url, 10000);
     if (!result.text) continue;
 
     const html = renderedPage?.html?.trim() ? renderedPage.html : result.text;
+    if (!isLikelyHtmlResponse(renderedPage?.contentType ?? result.contentType, html)) continue;
     const title = extractTitle(html);
     const canonicalUrl = readCanonical(html, url);
     const metaDescription = readMetaTag(html, "description");
@@ -906,6 +1533,8 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
     const h1 = extractHeadings(html, "h1");
     const h2 = extractHeadings(html, "h2");
     const schemaTypes = extractSchemaTypes(html);
+    const schemaValidation = validateSchemaMarkup(html);
+    const napSignals = extractNapSignals(html);
     const hreflangLinks = extractHreflangLinks(html, url);
     const wordData = extractWordCount(html);
     const images = extractImages(html);
@@ -924,6 +1553,8 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
       internalLinksOut: links.length,
       internalLinksIn: 0,
       schemaTypes,
+      schemaValidation,
+      napSignals,
       pageScore: 0,
       rawMeta: {
         contentType: result.contentType,
@@ -944,9 +1575,28 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
     page.pageScore = scorePage(page);
     pageMap.set(url, page);
     if (renderedPage?.html) renderedPages += 1;
+
+    for (const link of links) {
+      if (pageMap.size + crawlQueue.length >= crawlLimit) break;
+      if (!queuedUrls.has(link) && isLikelyContentPageUrl(link) && !isPathDisallowed(link, robots.disallowPaths)) {
+        queuedUrls.add(link);
+        crawlQueue.push(link);
+      }
+    }
   }
 
   const pages = Array.from(pageMap.values());
+  const schemaValidation: SchemaValidationSummary = {
+    itemCount: pages.reduce((sum, page) => sum + page.schemaValidation.itemCount, 0),
+    validItemCount: pages.reduce((sum, page) => sum + page.schemaValidation.validItemCount, 0),
+    errorCount: pages.reduce((sum, page) => sum + page.schemaValidation.errorCount, 0),
+    warningCount: pages.reduce((sum, page) => sum + page.schemaValidation.warningCount, 0),
+    syntaxErrorCount: pages.reduce((sum, page) => sum + page.schemaValidation.syntaxErrorCount, 0),
+    items: pages.flatMap((page) => page.schemaValidation.items).slice(0, 50),
+  };
+  const topicAnalysis = buildTopicAnalysis(pages);
+  const napConsistency = buildNapConsistency(pages);
+
   const internalLinkCandidates = collectInternalLinkCandidates(pages, origin).filter((link) => !pageMap.has(link));
   for (const candidate of internalLinkCandidates.slice(0, 12)) {
     const probe = await fetchStatus(candidate, 5000);
@@ -986,6 +1636,7 @@ async function crawlSite(normalizedUrl: string): Promise<DiscoveryResult> {
   return {
     robotsTxt: robots.robotsTxt,
     sitemapUrls: robots.sitemapUrls,
+    aiCrawlerAccess: robots.aiCrawlerAccess,
     sitemapDiscoveredUrls: uniqueSitemapUrls,
     pageSnapshots: pages,
     brokenLinks,
@@ -1126,6 +1777,44 @@ function buildAnalysisFindings(
     });
   }
 
+  if (discovery.schemaValidation.errorCount > 0) {
+    findings.push({
+      category: "technical",
+      severity: "medium",
+      signalKey: "schema_validation",
+      title: "Structured data validation issues detected",
+      description: `${discovery.schemaValidation.errorCount} schema error(s) were found across the crawled pages.`,
+      recommendation: "Fix the listed schema properties and JSON-LD syntax errors so search engines and AI systems can interpret the markup reliably.",
+      evidence: { schemaValidation: discovery.schemaValidation },
+      pageUrl: homepage?.url ?? null,
+    });
+  }
+
+  if (discovery.napConsistency.inconsistentFields.length > 0) {
+    findings.push({
+      category: "local",
+      severity: "high",
+      signalKey: "nap_inconsistency",
+      title: "Business details are inconsistent",
+      description: "The crawler found different values for " + discovery.napConsistency.inconsistentFields.join(", ") + " across the sampled pages.",
+      recommendation: "Use one canonical business name, address, and phone number everywhere your business details appear.",
+      evidence: { napConsistency: discovery.napConsistency },
+      pageUrl: homepage?.url ?? null,
+    });
+  }
+
+  if (discovery.topicAnalysis.thinTopics.length > 0) {
+    findings.push({
+      category: "content",
+      severity: "medium",
+      signalKey: "topic_coverage",
+      title: "Some topics appear on only one page",
+      description: "The crawler grouped " + discovery.topicAnalysis.totalKeywords + " meaningful keywords into " + discovery.topicAnalysis.clusters.length + " topic cluster(s); " + discovery.topicAnalysis.thinTopics.length + " cluster(s) have limited page coverage.",
+      recommendation: "Expand important topics across the pages where users need them, while keeping each page focused on a distinct search intent.",
+      evidence: { topicAnalysis: discovery.topicAnalysis },
+      pageUrl: homepage?.url ?? null,
+    });
+  }
   if (pagesWithSchema === 0) {
     findings.push({
       category: "ai",
@@ -1152,7 +1841,8 @@ function buildAnalysisFindings(
     });
   }
 
-  if (pages.some((page) => page.wordCount < 250)) {
+  const thinContentPage = pages.find((page) => isLikelyContentPageUrl(page.url) && page.wordCount < 250);
+  if (thinContentPage) {
     findings.push({
       category: "content",
       severity: "medium",
@@ -1161,7 +1851,7 @@ function buildAnalysisFindings(
       description: "At least one crawled page has low word count, which can weaken retrieval and relevance.",
       recommendation: "Expand thin pages with context, examples, and clearer section structure.",
       evidence: { avgPageScore, totalWordCount },
-      pageUrl: pages.find((page) => page.wordCount < 250)?.url ?? homepage?.url ?? null,
+      pageUrl: thinContentPage.url ?? homepage?.url ?? null,
     });
   }
 
@@ -1250,18 +1940,27 @@ function buildScoreBreakdown(
   const seo = Math.round((psiJson?.lighthouseResult?.categories?.seo?.score ?? 0) * 100);
   const best = Math.round((psiJson?.lighthouseResult?.categories?.["best-practices"]?.score ?? 0) * 100);
   const accessibility = Math.round((psiJson?.lighthouseResult?.categories?.accessibility?.score ?? 0) * 100);
+  const hasPageSpeedData = Boolean(psiJson?.lighthouseResult?.categories);
+  const canonicalCoverage = pages.length ? pages.filter((page) => page.canonicalUrl).length / pages.length : 0;
+  const headingCoverage = pages.length ? pages.filter((page) => page.h1Count === 1).length / pages.length : 0;
+  const schemaCoverage = pages.length ? pages.filter((page) => page.schemaTypes.length > 0).length / pages.length : 0;
 
   const technicalVisibility = Math.round(
     Math.max(
       0,
       Math.min(
         100,
-        (performance * 0.35) +
-          (seo * 0.25) +
-          (best * 0.15) +
-          (accessibility * 0.15) +
-          (Math.min(100, Math.max(0, crawlability)) * 0.1),
-        - brokenLinkPenalty,
+        (hasPageSpeedData
+          ? (performance * 0.35) +
+            (seo * 0.25) +
+            (best * 0.15) +
+            (accessibility * 0.15) +
+            (Math.min(100, Math.max(0, crawlability)) * 0.1)
+          : (Math.min(100, Math.max(0, crawlability)) * 0.45) +
+            (canonicalCoverage * 100 * 0.2) +
+            (headingCoverage * 100 * 0.2) +
+            (schemaCoverage * 100 * 0.15)) -
+          brokenLinkPenalty,
       ),
     ),
   );
@@ -1629,13 +2328,20 @@ serve(async (req) => {
   const psiKey = Deno.env.get("PAGESPEED_API_KEY");
 
   if (!serviceRoleKey) {
-    return new Response("Missing service role key", { status: 500, headers: corsHeaders });
-  }
-  if (!psiKey) {
-    return new Response("Missing PageSpeed API key", { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: "SCAN_CONFIG_MISSING", message: "Scan service is not configured yet." }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+  if (!psiKey) {
+    await logAdminError(supabase, {
+      source: "scan",
+      severity: "critical",
+      code: "MISSING_PAGESPEED_API_KEY",
+      message: "PageSpeed API key is not configured",
+      details: {},
+    });
+  }
 
   const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
   const accessToken = authHeader.replace("Bearer ", "").trim();
@@ -1807,7 +2513,16 @@ serve(async (req) => {
         error_message: cloneErr?.message ?? "Failed to save report",
         completed_at: nowIso,
       });
-      return new Response(JSON.stringify({ error: "Failed to save report", details: cloneErr?.message ?? null }), {
+      await logAdminError(supabase, {
+        source: "scan",
+        severity: "error",
+        code: "REPORT_SAVE_FAILED",
+        message: "Failed to save cached report",
+        details: { error: cloneErr?.message ?? null, source_report_id: sourceReportId },
+        userId,
+        websiteUrl: normalized,
+      });
+      return new Response(JSON.stringify({ error: "REPORT_SAVE_FAILED", message: "We couldn't save the report right now. Please try again in a few minutes." }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
@@ -1837,7 +2552,16 @@ serve(async (req) => {
         error_message: error instanceof Error ? error.message : String(error),
         completed_at: nowIso,
       });
-      return new Response(JSON.stringify({ error: "Failed to clone report artifacts", details: error instanceof Error ? error.message : String(error) }), {
+      await logAdminError(supabase, {
+        source: "scan",
+        severity: "error",
+        code: "ARTIFACT_CLONE_FAILED",
+        message: "Failed to clone cached report artifacts",
+        details: { error: error instanceof Error ? error.message : String(error), source_report_id: sourceReportId },
+        userId,
+        websiteUrl: normalized,
+      });
+      return new Response(JSON.stringify({ error: "ARTIFACT_CLONE_FAILED", message: "We couldn't prepare the latest report right now. Please try again in a few minutes." }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
@@ -1845,6 +2569,43 @@ serve(async (req) => {
 
     await updateJob({ status: "completed", progress: 100, completed_at: nowIso });
     return new Response(JSON.stringify({ ...(cloned as any), cached: true, credit_used: false }), {
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+  }
+
+  const scanHost = (() => {
+    try {
+      return new URL(normalized).hostname.replace(/^www\./i, "");
+    } catch {
+      return normalized;
+    }
+  })();
+  const scanRateLimit = await checkRateLimits(supabase, [
+    {
+      action: userId ? "scan:user" : "scan:visitor",
+      identifier: userId ? `user:${userId}` : `visitor:${visitorId}`,
+      identifierHint: userId ? "user" : "visitor",
+      limit: userId ? 25 : 5,
+      windowSeconds: 24 * 60 * 60,
+    },
+    { action: "scan:ip", identifier: getClientIp(req), identifierHint: "ip", limit: userId ? 50 : 10, windowSeconds: 24 * 60 * 60 },
+    { action: "scan:domain", identifier: scanHost, identifierHint: scanHost, limit: 8, windowSeconds: 24 * 60 * 60 },
+  ]);
+  if (!scanRateLimit.allowed) {
+    await updateJob({
+      status: "failed",
+      progress: 100,
+      error_code: "RATE_LIMITED",
+      error_message: "Scan limit reached",
+      completed_at: nowIso,
+    });
+    return new Response(JSON.stringify({
+      error: "RATE_LIMITED",
+      message: "This scan limit has been reached for now. Please try again later or view a recent report if one is available.",
+      limit: scanRateLimit.limit,
+      retry_after_seconds: scanRateLimit.retryAfterSeconds,
+    }), {
+      status: 429,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   }
@@ -1863,7 +2624,16 @@ serve(async (req) => {
       error_message: error instanceof Error ? error.message : String(error),
       completed_at: nowIso,
     });
-    return new Response(JSON.stringify({ error: "Failed to crawl website", details: error instanceof Error ? error.message : String(error) }), {
+    await logAdminError(supabase, {
+      source: "scan",
+      severity: "error",
+      code: "CRAWL_FAILED",
+      message: "Website crawl failed",
+      details: { error: error instanceof Error ? error.message : String(error) },
+      userId,
+      websiteUrl: normalized,
+    });
+    return new Response(JSON.stringify({ error: "CRAWL_FAILED", message: "We couldn't read this website. Please check that the URL opens in a browser and try again." }), {
       status: 502,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
@@ -1884,18 +2654,40 @@ serve(async (req) => {
     `&category=accessibility` +
     `&key=${psiKey}`;
 
-  try {
-    const psiRes = await fetch(psiUrl);
+  if (psiKey) {
+    try {
+      const psiRes = await fetch(psiUrl);
     if (!psiRes.ok) {
       const errorText = await psiRes.text();
       console.error("PSI failed", psiRes.status, errorText);
       psiFailureMessage = "PageSpeed data was unavailable";
+      await logAdminError(supabase, {
+        source: "scan",
+        severity: "warning",
+        code: "PAGESPEED_REQUEST_FAILED",
+        message: "PageSpeed request failed during scan",
+        details: { status: psiRes.status, error: errorText.slice(0, 1000) },
+        userId,
+        websiteUrl: normalized,
+      });
     } else {
       psiJson = await psiRes.json();
+      }
+    } catch (error) {
+      console.error("PSI request error", error);
+      psiFailureMessage = "PageSpeed data was unavailable";
+      await logAdminError(supabase, {
+        source: "scan",
+        severity: "warning",
+        code: "PAGESPEED_REQUEST_ERROR",
+        message: "PageSpeed request errored during scan",
+        details: { error: error instanceof Error ? error.message : String(error) },
+        userId,
+        websiteUrl: normalized,
+      });
     }
-  } catch (error) {
-    console.error("PSI request error", error);
-    psiFailureMessage = "PageSpeed data was unavailable";
+  } else {
+    psiFailureMessage = "PageSpeed data was not configured";
   }
   const perf = Math.round((psiJson?.lighthouseResult?.categories?.performance?.score ?? 0) * 100);
   const seo = Math.round((psiJson?.lighthouseResult?.categories?.seo?.score ?? 0) * 100);
@@ -1931,9 +2723,13 @@ serve(async (req) => {
     crawler: {
       robotsTxt: discovery.robotsTxt,
       sitemapUrls: discovery.sitemapUrls,
+      aiCrawlerAccess: discovery.aiCrawlerAccess,
       sitemapDiscoveredUrls: discovery.sitemapDiscoveredUrls,
       brokenLinks: discovery.brokenLinks,
       entityEnrichment: discovery.entityEnrichment,
+      schemaValidation: discovery.schemaValidation,
+      topicAnalysis: discovery.topicAnalysis,
+      napConsistency: discovery.napConsistency,
       discoveryNotes: discovery.discoveryNotes,
       rendering: discovery.rendering,
       pages: discovery.pageSnapshots.map((page) => ({
@@ -1948,6 +2744,8 @@ serve(async (req) => {
         internalLinksOut: page.internalLinksOut,
         internalLinksIn: page.internalLinksIn,
         schemaTypes: page.schemaTypes,
+        schemaValidation: page.schemaValidation,
+        napSignals: page.napSignals,
         pageScore: page.pageScore,
         faqCount: page.faqCount,
         imageAltCount: page.imageAltCount,
@@ -2034,7 +2832,16 @@ serve(async (req) => {
       error_message: repErr?.message ?? "Failed to save report",
       completed_at: nowIso,
     });
-    return new Response(JSON.stringify({ error: "Failed to save report", details: repErr?.message ?? null }), {
+    await logAdminError(supabase, {
+      source: "scan",
+      severity: "error",
+      code: "REPORT_SAVE_FAILED",
+      message: "Failed to save report",
+      details: { error: repErr?.message ?? null },
+      userId,
+      websiteUrl: normalized,
+    });
+    return new Response(JSON.stringify({ error: "REPORT_SAVE_FAILED", message: "We couldn't save the report right now. Please try again in a few minutes." }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
@@ -2058,8 +2865,18 @@ serve(async (req) => {
       error_message: error instanceof Error ? error.message : String(error),
       completed_at: nowIso,
     });
+    await logAdminError(supabase, {
+      source: "scan",
+      severity: "error",
+      code: "ARTIFACT_SAVE_FAILED",
+      message: "Failed to save report artifacts",
+      details: { error: error instanceof Error ? error.message : String(error), report_id: String(report.id) },
+      userId,
+      reportId: String(report.id),
+      websiteUrl: normalized,
+    });
     return new Response(
-      JSON.stringify({ error: "Failed to save report artifacts", details: error instanceof Error ? error.message : String(error) }),
+      JSON.stringify({ error: "ARTIFACT_SAVE_FAILED", message: "We couldn't finish saving the report right now. Please try again in a few minutes." }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
     );
   }

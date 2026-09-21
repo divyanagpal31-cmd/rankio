@@ -29,7 +29,7 @@ function getReportIdFromSearch(search: string): string | null {
   return new URLSearchParams(search).get("reportId")?.trim() ?? null;
 }
 
-export function Subscription() {
+export function CreditsBilling() {
   const { subscription } = useSubscription();
   const { subscriptions, loading: historyLoading, error: historyError } = useSubscriptionHistory();
   const { transactions, loading: transactionsLoading, error: transactionsError } = usePaymentTransactions();
@@ -222,12 +222,12 @@ export function Subscription() {
         <TabsContent value="overview" className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
-          <div className="text-sm text-muted-foreground">Current plan</div>
+          <div className="text-sm text-muted-foreground">Current package</div>
           <div className="mt-1 text-2xl font-semibold text-primary">
-            {activePlanName ?? "No active plan"}
+            {activePlanName ?? "No active package"}
           </div>
           <div className="mt-2 text-sm text-muted-foreground">
-            {subscription?.status ? `${formatStatus(subscription.status)} package` : "Choose a plan to unlock full reports."}
+            {subscription?.status ? `${formatStatus(subscription.status)} package` : "Choose a one-time package to unlock full reports."}
           </div>
         </Card>
 
@@ -355,8 +355,8 @@ export function Subscription() {
       <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-primary">Plan History</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Review your current and previous purchased plans.</p>
+            <h2 className="text-xl font-semibold text-primary">Package History</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Review your current and previous one-time packages.</p>
           </div>
           {historyError && <p className="text-sm text-red-600">{historyError}</p>}
         </div>
@@ -365,7 +365,7 @@ export function Subscription() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead>
               <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-3 pr-4 font-semibold">Plan</th>
+                <th className="py-3 pr-4 font-semibold">Package</th>
                 <th className="py-3 pr-4 font-semibold">Status</th>
                 <th className="py-3 pr-4 font-semibold">Credits</th>
                 <th className="py-3 pr-4 font-semibold">Purchased On</th>
@@ -377,7 +377,7 @@ export function Subscription() {
               {historyLoading ? (
                 <tr>
                   <td colSpan={6} className="py-6 text-muted-foreground">
-                    Loading plan history...
+                    Loading package history...
                   </td>
                 </tr>
               ) : subscriptions.length > 0 ? (
@@ -410,7 +410,7 @@ export function Subscription() {
               ) : (
                 <tr>
                   <td colSpan={6} className="py-6 text-muted-foreground">
-                    No plan purchases yet.
+                    No package purchases yet.
                   </td>
                 </tr>
               )}
@@ -433,7 +433,7 @@ export function Subscription() {
             <thead>
               <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="py-3 pr-4 font-semibold">Date</th>
-                <th className="py-3 pr-4 font-semibold">Plan</th>
+                <th className="py-3 pr-4 font-semibold">Package</th>
                 <th className="py-3 pr-4 font-semibold">Amount</th>
                 <th className="py-3 pr-4 font-semibold">Status</th>
                 <th className="py-3 pr-4 font-semibold">Provider</th>
@@ -498,7 +498,7 @@ export function Subscription() {
                 <th className="py-3 pr-4 font-semibold">Unlocked On</th>
                 <th className="py-3 pr-4 font-semibold">Website</th>
                 <th className="py-3 pr-4 font-semibold">Score</th>
-                <th className="py-3 pr-4 font-semibold">Plan</th>
+                <th className="py-3 pr-4 font-semibold">Package</th>
                 <th className="py-3 pr-4 font-semibold">Credit</th>
                 <th className="py-3 pr-4 font-semibold">Reason</th>
                 <th className="py-3 pr-4 font-semibold">Payment ID</th>
@@ -557,3 +557,4 @@ export function Subscription() {
     </div>
   );
 }
+

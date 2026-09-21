@@ -12,7 +12,7 @@ export function PayPalCancel() {
 
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
-            <Link to="/dashboard/subscription">Back to plans</Link>
+            <Link to="/dashboard/credits">Back to plans</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link to="/">Go home</Link>

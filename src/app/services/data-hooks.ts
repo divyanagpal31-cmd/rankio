@@ -180,21 +180,13 @@ export function useWebsites() {
       }
     > =
       {};
-    let latestScanByWebsiteId: Record<
-      string,
-      {
-        website_id: string;
-        status: string | null;
-        created_at: string | null;
-        completed_at?: string | null;
-      }
-    > = {};
 
     if (ids.length > 0) {
       const { data: reports, error: rErr } = await supabase
         .from("reports")
         .select("id, website_id, status, ai_score, generated_at, report_level, access_tier_required, is_cached")
         .in("website_id", ids)
+        .eq("status", "completed")
         .order("generated_at", { ascending: false })
         .limit(500);
 
@@ -207,42 +199,21 @@ export function useWebsites() {
           }
         }
       }
-
-      const { data: scanJobs, error: sErr } = await supabase
-        .from("scan_jobs")
-        .select("website_id, status, created_at, completed_at")
-        .in("website_id", ids)
-        .order("created_at", { ascending: false })
-        .limit(500);
-
-      if (!sErr) {
-        for (const row of (scanJobs ?? []) as any[]) {
-          const websiteId = String(row.website_id ?? "");
-          if (!websiteId) continue;
-          if (!latestScanByWebsiteId[websiteId]) {
-            latestScanByWebsiteId[websiteId] = row;
-          }
-        }
-      }
     }
 
     setError(null);
     setData(
       websiteRows.map((w) => {
         const latest = latestByWebsiteId[w.id];
-        const latestScan = latestScanByWebsiteId[w.id];
-        const latestReportAt = latest?.generated_at ? new Date(latest.generated_at).getTime() : 0;
-        const latestScanAt = latestScan?.created_at ? new Date(latestScan.created_at).getTime() : 0;
-        const shouldUseScanStatus = latestScan && latestScanAt > latestReportAt;
         return {
           ...w,
-          status: shouldUseScanStatus ? latestScan.status : latest?.status ?? w.status ?? null,
-          score: shouldUseScanStatus ? null : latest?.ai_score ?? null,
+          status: latest?.status ?? w.status ?? null,
+          score: latest?.ai_score ?? null,
           latest_report_id: latest?.id ?? null,
-          latest_report_at: shouldUseScanStatus ? latestScan.completed_at ?? latestScan.created_at ?? null : latest?.generated_at ?? null,
-          latest_report_level: shouldUseScanStatus ? null : latest?.report_level ?? null,
-          latest_access_tier_required: shouldUseScanStatus ? null : latest?.access_tier_required ?? null,
-          latest_is_cached: shouldUseScanStatus ? null : latest?.is_cached ?? null,
+          latest_report_at: latest?.generated_at ?? null,
+          latest_report_level: latest?.report_level ?? null,
+          latest_access_tier_required: latest?.access_tier_required ?? null,
+          latest_is_cached: latest?.is_cached ?? null,
         };
       })
     );
@@ -257,7 +228,11 @@ export function useWebsites() {
     if (!user) return;
     const handler = () => fetchWebsites();
     window.addEventListener("rankio:visitor-claimed", handler);
-    return () => window.removeEventListener("rankio:visitor-claimed", handler);
+    window.addEventListener("rankio:dashboard-refresh", handler);
+    return () => {
+      window.removeEventListener("rankio:visitor-claimed", handler);
+      window.removeEventListener("rankio:dashboard-refresh", handler);
+    };
   }, [user, fetchWebsites]);
 
   return { websites: user ? data : fallbackWebsites, loading, error, refetch: fetchWebsites };
@@ -303,6 +278,7 @@ export function useReports() {
       .from("reports")
       .select("*, websites!inner(user_id)")
       .eq("websites.user_id", user.id)
+      .eq("status", "completed")
       .order("generated_at", { ascending: false });
 
     if (repErr) {
@@ -323,7 +299,11 @@ export function useReports() {
     if (!user) return;
     const handler = () => fetchReports();
     window.addEventListener("rankio:visitor-claimed", handler);
-    return () => window.removeEventListener("rankio:visitor-claimed", handler);
+    window.addEventListener("rankio:dashboard-refresh", handler);
+    return () => {
+      window.removeEventListener("rankio:visitor-claimed", handler);
+      window.removeEventListener("rankio:dashboard-refresh", handler);
+    };
   }, [user, fetchReports]);
 
   return { reports: data, loading, error, refetch: fetchReports };
@@ -336,7 +316,7 @@ export function useStats() {
   const [stats, setStats] = useState({
     totalWebsites: 0,
     averageScore: 0,
-    activePlan: "No active plan",
+    activePlan: "No active package",
     reportsGenerated: 0,
     recentScans: [] as { url: string; score: number; date?: string; status?: string; reportId?: string }[],
   });
@@ -409,9 +389,10 @@ export function useStats() {
             .from("reports")
             .select("id, website_id, ai_score, status, generated_at")
             .in("website_id", websiteIds)
+            .eq("status", "completed")
             .order("generated_at", { ascending: false })
             .limit(50),
-          supabase.from("reports").select("id", { count: "exact", head: true }).in("website_id", websiteIds),
+          supabase.from("reports").select("id", { count: "exact", head: true }).in("website_id", websiteIds).eq("status", "completed"),
         ]);
 
         if (reportsRes.error) throw new Error(reportsRes.error.message);
@@ -449,7 +430,7 @@ export function useStats() {
       const activePlan =
         subscriptionRow?.plan_name ??
         subscriptionRow?.plan ??
-        (subscriptionRow?.plan_slug ? subscriptionRow.plan_slug.toUpperCase() : "No active plan");
+        (subscriptionRow?.plan_slug ? subscriptionRow.plan_slug.toUpperCase() : "No active package");
 
       const nextStats = {
         totalWebsites,
@@ -482,7 +463,11 @@ export function useStats() {
       void fetchStats();
     };
     window.addEventListener("rankio:subscription-updated", handler);
-    return () => window.removeEventListener("rankio:subscription-updated", handler);
+    window.addEventListener("rankio:dashboard-refresh", handler);
+    return () => {
+      window.removeEventListener("rankio:subscription-updated", handler);
+      window.removeEventListener("rankio:dashboard-refresh", handler);
+    };
   }, [user, fetchStats]);
 
   return { stats, loading, error };

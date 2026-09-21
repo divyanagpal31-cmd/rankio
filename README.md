@@ -9,6 +9,12 @@
 
   Run `npm run dev` to start the development server.
 
+  ## First-party crawl and content analysis
+
+  Rankio's scan function includes its own crawl and analysis pipeline. It discovers pages from `robots.txt`, `sitemap.xml`, and internal links, then analyzes titles, meta descriptions, headings, canonicals, schema, FAQs, image alt text, internal link structure, broken links, entity signals, and content chunks. The crawler is self-run and does not require a paid crawling API.
+
+  The crawler visits up to 12 internal pages per scan and respects `robots.txt` disallow paths. `PAGESPEED_API_KEY` is optional: when it is not configured, the report still completes using Rankio's first-party crawl and content signals; PageSpeed performance categories are simply unavailable for that report.
+
   ## Browser rendering / headless crawl
 
   The scan Edge Function can optionally fetch pages through a browser-rendering service before running the crawl extractors. This is useful for JavaScript-heavy sites whose meaningful HTML is not present in the initial server response.

@@ -35,6 +35,37 @@ function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
+
+
+async function logAdminError(
+  supabase: any,
+  entry: {
+    source: string;
+    severity?: "info" | "warning" | "error" | "critical";
+    code?: string;
+    message: string;
+    details?: Record<string, unknown>;
+    userId?: string | null;
+    reportId?: string | null;
+    websiteUrl?: string | null;
+  },
+) {
+  try {
+    await supabase.from("admin_error_logs").insert({
+      source: entry.source,
+      severity: entry.severity ?? "error",
+      code: entry.code ?? null,
+      message: entry.message,
+      details: entry.details ?? {},
+      user_id: entry.userId ?? null,
+      report_id: entry.reportId ?? null,
+      website_url: entry.websiteUrl ?? null,
+    });
+  } catch (error) {
+    console.error("admin error log insert failed", error);
+  }
+}
+
 const validReasons = new Set([
   "Report Support",
   "Billing & Payment",
@@ -43,6 +74,78 @@ const validReasons = new Set([
   "Agency / Bulk Reports",
   "General Enquiry",
 ]);
+
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || "unknown";
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+type RateLimitRule = {
+  action: string;
+  identifier: string;
+  identifierHint?: string;
+  limit: number;
+  windowSeconds: number;
+};
+
+type RateLimitResult = {
+  allowed: boolean;
+  limit?: number;
+  remaining?: number;
+  retryAfterSeconds?: number;
+};
+
+async function checkRateLimit(supabase: any, rule: RateLimitRule): Promise<RateLimitResult> {
+  const identifier = String(rule.identifier ?? "").trim().toLowerCase();
+  if (!identifier) return { allowed: true };
+
+  try {
+    const identifierHash = await sha256Hex(`${rule.action}:${identifier}`);
+    const since = new Date(Date.now() - rule.windowSeconds * 1000).toISOString();
+    const { count, error } = await supabase
+      .from("public_rate_limit_events")
+      .select("id", { count: "exact", head: true })
+      .eq("action", rule.action)
+      .eq("identifier_hash", identifierHash)
+      .gte("created_at", since);
+
+    if (error) {
+      console.error("rate limit lookup failed", error);
+      return { allowed: true };
+    }
+
+    const used = count ?? 0;
+    if (used >= rule.limit) {
+      return { allowed: false, limit: rule.limit, remaining: 0, retryAfterSeconds: rule.windowSeconds };
+    }
+
+    await supabase.from("public_rate_limit_events").insert({
+      action: rule.action,
+      identifier_hash: identifierHash,
+      identifier_hint: rule.identifierHint?.slice(0, 120) ?? null,
+    });
+
+    return { allowed: true, limit: rule.limit, remaining: Math.max(rule.limit - used - 1, 0) };
+  } catch (error) {
+    console.error("rate limit failed", error);
+    return { allowed: true };
+  }
+}
+
+async function checkRateLimits(supabase: any, rules: RateLimitRule[]): Promise<RateLimitResult> {
+  for (const rule of rules) {
+    const result = await checkRateLimit(supabase, rule);
+    if (!result.allowed) return result;
+  }
+  return { allowed: true };
+}
 
 function normalizeWebsiteUrl(value: string): string {
   const trimmed = value.trim();
@@ -70,7 +173,7 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY") ?? "";
   const resendKey = Deno.env.get("RESEND_API_KEY") ?? "";
-  const adminEmail = Deno.env.get("ADMIN_EMAIL") ?? "divya.nagpal31@gmail.com";
+  const adminEmail = Deno.env.get("ADMIN_EMAIL") ?? "";
   const fromEmail = Deno.env.get("LEAD_FROM_EMAIL") ?? "Rankio <onboarding@resend.dev>";
   const turnstileSecret = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
 
@@ -178,6 +281,22 @@ serve(async (req) => {
     });
   }
 
+  const rateLimit = await checkRateLimits(supabase, [
+    { action: "contact:ip", identifier: getClientIp(req), identifierHint: "ip", limit: 10, windowSeconds: 60 * 60 },
+    { action: "contact:email", identifier: email, identifierHint: email, limit: 5, windowSeconds: 60 * 60 },
+  ]);
+  if (!rateLimit.allowed) {
+    return new Response(JSON.stringify({
+      error: "RATE_LIMITED",
+      message: "Too many contact messages were submitted. Please try again later.",
+      limit: rateLimit.limit,
+      retry_after_seconds: rateLimit.retryAfterSeconds,
+    }), {
+      status: 429,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+  }
+
   if (turnstileSecret) {
     if (!captchaToken) {
       return new Response(JSON.stringify({ error: "CAPTCHA_REQUIRED", message: "CAPTCHA is required" }), {
@@ -236,11 +355,19 @@ serve(async (req) => {
     .single();
 
   if (contactErr) {
+    await logAdminError(supabase, {
+      source: "contact-notify",
+      severity: "error",
+      code: "CONTACT_INSERT_FAILED",
+      message: "Failed to save contact message",
+      details: { error: contactErr.message, email, reason, source },
+      userId,
+      websiteUrl: normalizedWebsite || null,
+    });
     return new Response(
       JSON.stringify({
         error: "CONTACT_INSERT_FAILED",
-        message: "Failed to save contact message",
-        details: contactErr.message,
+        message: "We couldn't save your message right now. Please try again in a few minutes.",
       }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
     );
@@ -361,9 +488,18 @@ serve(async (req) => {
   </body>
 </html>`;
 
-  if (!resendKey) {
+  if (!resendKey || !adminEmail) {
+    await logAdminError(supabase, {
+      source: "contact-notify",
+      severity: "critical",
+      code: !adminEmail ? "MISSING_ADMIN_EMAIL" : "MISSING_RESEND_API_KEY",
+      message: !adminEmail ? "Contact admin email is not configured" : "Resend API key is not configured for contact emails",
+      details: { contact_id: contactId, email, reason, has_resend_key: Boolean(resendKey), has_admin_email: Boolean(adminEmail) },
+      userId,
+      websiteUrl: normalizedWebsite || null,
+    });
     return new Response(
-      JSON.stringify({ ok: true, contact_id: contactId, email_sent: false, email_error: "MISSING_RESEND_API_KEY" }),
+      JSON.stringify({ ok: true, contact_id: contactId, email_sent: false, email_error: !adminEmail ? "MISSING_ADMIN_EMAIL" : "MISSING_RESEND_API_KEY" }),
       {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },
@@ -389,6 +525,15 @@ serve(async (req) => {
 
   if (!resendRes.ok) {
     const details = await resendRes.text().catch(() => "");
+    await logAdminError(supabase, {
+      source: "contact-notify",
+      severity: "error",
+      code: "EMAIL_SEND_FAILED",
+      message: "Contact message was saved, but admin email failed",
+      details: { contact_id: contactId, status: resendRes.status, email_error: details },
+      userId,
+      websiteUrl: normalizedWebsite || null,
+    });
     return new Response(JSON.stringify({ ok: true, contact_id: contactId, email_sent: false, email_error: details }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },

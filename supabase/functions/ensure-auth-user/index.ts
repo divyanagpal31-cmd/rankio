@@ -22,6 +22,78 @@ function readMetadata(value: unknown): Record<string, unknown> {
   );
 }
 
+
+function getClientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || "unknown";
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+type RateLimitRule = {
+  action: string;
+  identifier: string;
+  identifierHint?: string;
+  limit: number;
+  windowSeconds: number;
+};
+
+type RateLimitResult = {
+  allowed: boolean;
+  limit?: number;
+  remaining?: number;
+  retryAfterSeconds?: number;
+};
+
+async function checkRateLimit(supabase: any, rule: RateLimitRule): Promise<RateLimitResult> {
+  const identifier = String(rule.identifier ?? "").trim().toLowerCase();
+  if (!identifier) return { allowed: true };
+
+  try {
+    const identifierHash = await sha256Hex(`${rule.action}:${identifier}`);
+    const since = new Date(Date.now() - rule.windowSeconds * 1000).toISOString();
+    const { count, error } = await supabase
+      .from("public_rate_limit_events")
+      .select("id", { count: "exact", head: true })
+      .eq("action", rule.action)
+      .eq("identifier_hash", identifierHash)
+      .gte("created_at", since);
+
+    if (error) {
+      console.error("rate limit lookup failed", error);
+      return { allowed: true };
+    }
+
+    const used = count ?? 0;
+    if (used >= rule.limit) {
+      return { allowed: false, limit: rule.limit, remaining: 0, retryAfterSeconds: rule.windowSeconds };
+    }
+
+    await supabase.from("public_rate_limit_events").insert({
+      action: rule.action,
+      identifier_hash: identifierHash,
+      identifier_hint: rule.identifierHint?.slice(0, 120) ?? null,
+    });
+
+    return { allowed: true, limit: rule.limit, remaining: Math.max(rule.limit - used - 1, 0) };
+  } catch (error) {
+    console.error("rate limit failed", error);
+    return { allowed: true };
+  }
+}
+
+async function checkRateLimits(supabase: any, rules: RateLimitRule[]): Promise<RateLimitResult> {
+  for (const rule of rules) {
+    const result = await checkRateLimit(supabase, rule);
+    if (!result.allowed) return result;
+  }
+  return { allowed: true };
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -69,6 +141,19 @@ serve(async (req) => {
       persistSession: false,
     },
   });
+
+  const rateLimit = await checkRateLimits(supabase, [
+    { action: "auth-helper:ip", identifier: getClientIp(req), identifierHint: "ip", limit: 20, windowSeconds: 15 * 60 },
+    { action: "auth-helper:email", identifier: email, identifierHint: email, limit: 5, windowSeconds: 15 * 60 },
+  ]);
+  if (!rateLimit.allowed) {
+    return jsonResponse({
+      error: "RATE_LIMITED",
+      message: "Too many login requests were made. Please wait a few minutes and try again.",
+      limit: rateLimit.limit,
+      retry_after_seconds: rateLimit.retryAfterSeconds,
+    }, 429);
+  }
 
   const { data: createdUser, error } = await supabase.auth.admin.createUser({
     email,

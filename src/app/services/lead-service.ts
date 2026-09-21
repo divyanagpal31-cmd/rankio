@@ -26,6 +26,25 @@ export async function submitPlanLead(
 
   const defaultMsg = error.message ?? "Failed to submit";
   const lower = defaultMsg.toLowerCase();
+  const ctx = (error as any)?.context as Response | undefined;
+  if (ctx && typeof ctx.text === "function") {
+    try {
+      const raw = await ctx.text();
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as any;
+          const msg = String(parsed?.message ?? parsed?.error ?? "").trim();
+          const details = String(parsed?.details ?? "").trim();
+          if (msg && details) return { error: `${msg}: ${details}` };
+          if (msg) return { error: msg };
+        } catch {
+          return { error: raw };
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   // If the Edge Function isn't reachable (common in local/dev or misconfigured env),
   // attempt a direct insert as a fallback. This only works if RLS allows it.
@@ -59,26 +78,6 @@ export async function submitPlanLead(
         "Lead service is not configured. Deploy the `lead-notify` Edge Function and set it to public (verify_jwt=false), or allow client inserts into `leads`.",
     };
   }
-  const ctx = (error as any)?.context as Response | undefined;
-  if (ctx && typeof ctx.text === "function") {
-    try {
-      const raw = await ctx.text();
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as any;
-          const msg = String(parsed?.message ?? parsed?.error ?? "").trim();
-          const details = String(parsed?.details ?? "").trim();
-          if (msg && details) return { error: `${msg}: ${details}` };
-          if (msg) return { error: msg };
-        } catch {
-          return { error: raw };
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-
   // Avoid leaking infra details to end-users.
   if (lower.includes("resend") || lower.includes("service_role") || lower.includes("supabase_url")) {
     return { error: "We couldn't submit your request right now. Please email support@rankio.ai." };

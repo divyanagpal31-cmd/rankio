@@ -207,6 +207,8 @@ Comparison output example:
 ## Current Implementation Notes
 - PageSpeed Insights remains part of the performance layer.
 - The crawl layer can optionally use a browser-rendered DOM when `BROWSER_RENDER_URL` is configured.
+- First-party crawling discovers up to 12 internal pages from robots.txt, sitemap.xml, and internal links, then runs the content and technical analysis without requiring a paid crawling API.
+- PageSpeed Insights is an optional performance enhancement; the core crawl report can complete without `PAGESPEED_API_KEY`.
 - The scanner should be refactored into modules rather than a single monolithic step.
 - The architecture should continue to support future monitoring, competitor tracking, and recurring audits without a rebuild.
 

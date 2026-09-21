@@ -63,6 +63,37 @@ function json(body: Record<string, unknown>, status = 200): Response {
   });
 }
 
+
+
+async function logAdminError(
+  supabase: any,
+  entry: {
+    source: string;
+    severity?: "info" | "warning" | "error" | "critical";
+    code?: string;
+    message: string;
+    details?: Record<string, unknown>;
+    userId?: string | null;
+    reportId?: string | null;
+    websiteUrl?: string | null;
+  },
+) {
+  try {
+    await supabase.from("admin_error_logs").insert({
+      source: entry.source,
+      severity: entry.severity ?? "error",
+      code: entry.code ?? null,
+      message: entry.message,
+      details: entry.details ?? {},
+      user_id: entry.userId ?? null,
+      report_id: entry.reportId ?? null,
+      website_url: entry.websiteUrl ?? null,
+    });
+  } catch (error) {
+    console.error("admin error log insert failed", error);
+  }
+}
+
 async function readJson(req: Request): Promise<Record<string, unknown>> {
   try {
     return (await req.json()) as Record<string, unknown>;
@@ -283,11 +314,23 @@ serve(async (req) => {
 
   try {
     if (!supabaseUrl || !supabaseSecretKey || !paypalClientId || !paypalClientSecret) {
+      if (supabaseUrl && supabaseSecretKey) {
+        await logAdminError(admin, {
+          source: "paypal-checkout",
+          severity: "critical",
+          code: "PAYPAL_CONFIG_MISSING",
+          message: "PayPal checkout is missing required environment variables",
+          details: {
+            has_supabase_url: Boolean(supabaseUrl),
+            has_supabase_secret_key: Boolean(supabaseSecretKey),
+            has_paypal_client_id: Boolean(paypalClientId),
+            has_paypal_client_secret: Boolean(paypalClientSecret),
+          },
+        });
+      }
       return json(
         {
-          error: "PayPal checkout is not configured yet.",
-          details:
-            "Set SUPABASE_URL, SUPABASE_SECRET_KEYS (or legacy SUPABASE_SERVICE_ROLE_KEY), PAYPAL_CLIENT_ID, and PAYPAL_CLIENT_SECRET.",
+          error: "Payment checkout is not available right now. Please try again later or contact support.",
         },
         500,
       );
@@ -507,9 +550,16 @@ serve(async (req) => {
 
     return json({ error: "Unsupported action" }, 400);
   } catch (error) {
+    await logAdminError(admin, {
+      source: "paypal-checkout",
+      severity: "error",
+      code: "PAYPAL_CHECKOUT_FAILED",
+      message: "PayPal checkout failed",
+      details: { error: error instanceof Error ? error.message : String(error) },
+    });
     return json(
       {
-        error: error instanceof Error ? error.message : "Unexpected PayPal checkout failure",
+        error: "Payment checkout failed. Please try again in a few minutes.",
       },
       500,
     );

@@ -20,7 +20,7 @@ export function PayPalSuccess() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
-  const [subscription, setSubscription] = useState<Record<string, unknown> | null>(null);
+  const [purchasedPackage, setPurchasedPackage] = useState<Record<string, unknown> | null>(null);
 
   const token = useMemo(() => getTokenFromLocation(location.search), [location.search]);
   const reportId = useMemo(() => getReportIdFromLocation(location.search), [location.search]);
@@ -80,7 +80,7 @@ export function PayPalSuccess() {
         }
       } else {
         setPlanId(result.planId ?? null);
-        setSubscription(result.subscription ?? null);
+        setPurchasedPackage(result.subscription ?? null);
         try {
           sessionStorage.setItem(captureLockKey, "done");
           sessionStorage.removeItem(captureStartedAtKey);
@@ -123,7 +123,7 @@ export function PayPalSuccess() {
     };
   }, [token, captureLockKey, captureStartedAtKey, navigate, reportId]);
 
-  const planSlug = String(subscription?.plan_slug ?? planId ?? "").trim() as any;
+  const planSlug = String(purchasedPackage?.plan_slug ?? planId ?? "").trim() as any;
   const plan = paymentPlans.find((item) => item.id === planSlug) ?? null;
 
   return (
@@ -148,7 +148,7 @@ export function PayPalSuccess() {
                 </Button>
               ) : null}
               <Button asChild>
-                <Link to="/dashboard/subscription">Back to plans</Link>
+                <Link to="/dashboard/credits">Back to plans</Link>
               </Button>
               <Button variant="outline" asChild>
                 <Link to="/">Go home</Link>
@@ -164,13 +164,13 @@ export function PayPalSuccess() {
             <div className="rounded-2xl bg-slate-50 p-5">
               <div className="text-sm text-muted-foreground">Activated plan</div>
               <div className="mt-1 text-2xl font-semibold text-primary">{plan?.name ?? "Your plan"}</div>
-              {typeof subscription?.report_quota === "number" && (
+              {typeof purchasedPackage?.report_quota === "number" && (
                 <div className="mt-2 text-sm text-muted-foreground">
-                  Report credits: {String(subscription.report_quota)} total
+                  Report credits: {String(purchasedPackage.report_quota)} total
                 </div>
               )}
-              {typeof subscription?.payment_order_id === "string" && (
-                <div className="mt-2 text-xs text-muted-foreground">Order ID: {String(subscription.payment_order_id)}</div>
+              {typeof purchasedPackage?.payment_order_id === "string" && (
+                <div className="mt-2 text-xs text-muted-foreground">Order ID: {String(purchasedPackage.payment_order_id)}</div>
               )}
             </div>
 
@@ -189,7 +189,7 @@ export function PayPalSuccess() {
                 <Link to="/dashboard">Go to dashboard</Link>
               </Button>
               <Button variant="outline" asChild>
-                <Link to="/dashboard/subscription">View plans</Link>
+                <Link to="/dashboard/credits">View plans</Link>
               </Button>
             </div>
           </div>

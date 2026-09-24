@@ -734,14 +734,14 @@ function scanScopeFromUrl(value?: string | null) {
       label: isLandingPage ? "Landing Page" : "Website",
       targetLabel: isLandingPage ? `${url.host.replace(/^www\./i, "")}${path}` : url.host.replace(/^www\./i, ""),
       description: isLandingPage
-        ? "Started from this exact landing page and reviewed related pages from the same website when available."
-        : "Started from the website homepage and reviewed key related pages when available.",
+        ? "We analyzed your website's homepage and relevant publicly accessible pages to identify key visibility, technical, and content signals."
+        : "We analyzed your website's homepage and relevant publicly accessible pages to identify key visibility, technical, and content signals.",
     };
   } catch {
     return {
       label: "Website",
       targetLabel: hostFromUrl(value),
-      description: "Reviewed key pages from this website when available.",
+      description: "We analyzed your website's homepage and relevant publicly accessible pages to identify key visibility, technical, and content signals.",
     };
   }
 }
@@ -2254,7 +2254,7 @@ export function ReportPage() {
             className="flex w-full items-center gap-2"
           >
             <Settings className="mr-2 h-4 w-4" />
-            <span>Profile Settings</span>
+            <span>My Profile</span>
           </button>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -2804,7 +2804,7 @@ export function ReportPage() {
         title: "Priority Action Plan",
         description: `A simple view of what to fix first, what can improve quickly, and what helps AI tools trust the site over time.`,
         score: projectedScore,
-        scoreLabel: "Possible Score After Fixes",
+        scoreLabel: "Projected Score",
         tiles: [
           {
             label: "Fix First",
@@ -3054,9 +3054,9 @@ export function ReportPage() {
   const reportCreditUsedLabel =
     reportStatusLabel === "Full Report"
       ? (activeReport as any)?.is_cached
-        ? "Credit used: No"
-        : "Credit used: Yes"
-      : "Credit used: No";
+        ? "0"
+        : "1"
+      : "0";
   const activeReportGeneratedAt = (activeReport as any)?.generated_at as string | undefined;
   const activeReportGeneratedAtMs = activeReportGeneratedAt ? new Date(activeReportGeneratedAt).getTime() : NaN;
   const activeReportIsFresh = Number.isFinite(activeReportGeneratedAtMs) && Date.now() - activeReportGeneratedAtMs < REPORT_CACHE_MS;
@@ -3066,7 +3066,11 @@ export function ReportPage() {
   const scoreComparisonLabel =
     previousReport && Number.isFinite(scoreDelta)
       ? `${scoreDelta >= 0 ? "+" : ""}${scoreDelta} vs previous scan`
-      : "First recorded scan";
+      : "First Recorded Scan";
+  const reportDisplayTitle = isGuest ? "Your AI Visibility Preview" : verticalProfile.summaryTitle;
+  const reportDisplaySummary = isGuest
+    ? "Here's an initial view of your website's AI visibility signals, along with the areas that may benefit from further improvement."
+    : summaryText;
   const savedUserName = String((user?.user_metadata?.full_name as string | undefined) ?? "").trim();
   const savedUserEmail = String(user?.email ?? "").trim();
   const callbackNameReadonly = Boolean(savedUserName);
@@ -3077,13 +3081,13 @@ export function ReportPage() {
     const generatedAtLabel = activeReportGeneratedAt ? new Date(activeReportGeneratedAt).toLocaleDateString() : "Current report";
     const reportTypeLabel = reportLevelValue === "full" ? "Full Report" : "Preview Report";
     const blob = buildReportPdfBlob({
-      title: verticalProfile.summaryTitle,
+      title: reportDisplayTitle,
       website: displayHost,
       reportType: reportTypeLabel,
       generatedAt: generatedAtLabel,
       score: overallScore,
       maturity: maturityLabel(overallScore),
-      summary: summaryText,
+      summary: reportDisplaySummary,
       categoryScores,
       topIssues: topIssueCards,
       auditSections,
@@ -3378,8 +3382,8 @@ export function ReportPage() {
           <section className="report-print-cover">
             <div>
               <p className="report-print-kicker">Rankio AI Visibility Report</p>
-              <h1>{verticalProfile.summaryTitle}</h1>
-              <p className="report-print-summary">{summaryText}</p>
+              <h1>{reportDisplayTitle}</h1>
+              <p className="report-print-summary">{reportDisplaySummary}</p>
             </div>
             <div className="report-print-meta">
               <div>
@@ -3409,9 +3413,9 @@ export function ReportPage() {
                 <nav className="mt-8 space-y-2">
                   {[
                     { id: "executive-summary", label: "Executive Summary", icon: BarChart3 },
-                    { id: "ai-audit", label: "AI Audit", icon: Bot },
-                    { id: "implementation-plan", label: "Evidence & Fixes", icon: ShieldCheck },
-                    { id: "roadmap", label: "Roadmap", icon: Rocket },
+                    { id: "ai-audit", label: isGuest ? "AI Visibility Audit" : "AI Audit", icon: Bot },
+                    { id: "implementation-plan", label: isGuest ? "Findings & Recommendations" : "Evidence & Fixes", icon: ShieldCheck },
+                    { id: "roadmap", label: isGuest ? "Improvement Roadmap" : "Roadmap", icon: Rocket },
                   ].map((item) => {
                     const isLockedGuestTab = isGuest && item.id !== "executive-summary";
 
@@ -3496,7 +3500,7 @@ export function ReportPage() {
                             ? `${reportAccessTier.charAt(0).toUpperCase()}${reportAccessTier.slice(1)} Plan`
                             : reportPlanLabel,
                       },
-                      { label: "Credit Used", value: reportCreditUsedLabel.replace(/^Credit used:\s*/i, "") },
+                      { label: "Credit Used", value: reportCreditUsedLabel },
                     ].map((item) => (
                       <div key={item.label} className={`rounded-2xl border border-amber-300/20 bg-black/15 px-4 py-3 ${item.className ?? ""}`}>
                         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-200/80">{item.label}</p>
@@ -3529,14 +3533,14 @@ export function ReportPage() {
                         </defs>
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <div className="text-[72px] font-semibold leading-none text-white">{overallScore}</div>
-                        <div className="mt-2 max-w-[132px] text-[13px] leading-4 text-white/70">{verticalProfile.projectedLabel}</div>
+                        <div className="text-[32px] font-semibold leading-none text-white md:text-[38px]">{overallScore}/100</div>
+                        <div className="mt-2 max-w-[132px] text-[13px] leading-4 text-white/70">{isGuest ? "Current Preview Score" : verticalProfile.projectedLabel}</div>
                       </div>
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                       <span className="rounded-full border border-white/10 bg-white/8 px-4 py-2 text-sm text-white/80">
-                        {maturityLabel(overallScore)}
+                        {isGuest ? "Initial Assessment" : maturityLabel(overallScore)}
                       </span>
                       <span
                         className={`rounded-full border px-4 py-2 text-sm ${
@@ -3564,10 +3568,10 @@ export function ReportPage() {
 
                     <div>
                       <h1 className="text-[34px] font-semibold tracking-tight text-white md:text-[54px] md:leading-[1.02]">
-                        {verticalProfile.summaryTitle}
+                        {reportDisplayTitle}
                       </h1>
                       <p className={`mt-5 max-w-3xl text-[16px] leading-8 md:text-[18px] ${isGuest ? "text-[#f1cf7f]" : "text-white/65"}`}>
-                        {summaryText}
+                        {reportDisplaySummary}
                       </p>
                     </div>
 
@@ -3580,19 +3584,19 @@ export function ReportPage() {
 
                     <div className="grid gap-3 md:grid-cols-3">
                       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Possible Score After Fixes</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Improvement Opportunity</p>
                         <p className="mt-2 text-sm leading-6 text-white/72">
                           An estimate of how the score could improve after the most important recommendations are fixed.
                         </p>
                       </div>
                       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Maturity Level</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Website Assessment</p>
                         <p className="mt-2 text-sm leading-6 text-white/72">
                           <span className="font-semibold text-white/90">{maturityLabel(overallScore)}:</span> {maturityDescription(overallScore)}
                         </p>
                       </div>
                       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Customized For</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Report Focus</p>
                         <p className="mt-2 text-sm leading-6 text-white/72">
                           This report is written for {verticalProfile.audience.toLowerCase()} so the recommendations match that team&apos;s priorities.
                         </p>
@@ -3607,15 +3611,11 @@ export function ReportPage() {
                       <div>
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent/35 bg-accent/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-accent-foreground">
                           <Lock className="h-3.5 w-3.5" />
-                          Preview access
+                          Preview Analysis
                         </div>
-                        <h2 className="text-[24px] font-semibold text-white">Full report locked</h2>
+                        <h2 className="text-[24px] font-semibold text-white">Unlock Your Complete AI Visibility Report</h2>
                         <p className="mt-2 max-w-2xl text-sm leading-7 text-white/55">
-                          {needsCreditTopUp
-                            ? "You've used all the report credits included in your plan, so this scan is available in preview mode only. Purchase more credits to unlock the detailed AI audit, roadmap, and export-ready recommendations."
-                            : needsPlanPurchase
-                              ? "You don't have an active plan right now, so this scan is available in preview mode only. Purchase a plan to unlock the detailed AI audit, roadmap, and export-ready recommendations."
-                              : "You're seeing the score-only version. Sign in and purchase any plan to unlock the detailed AI audit, roadmap, and export-ready recommendations."}
+                          This preview provides an initial overview of your website. Unlock the full report to explore detailed findings, supporting explanations, prioritized recommendations, and an actionable improvement roadmap.
                         </p>
                       </div>
                       {user ? (
@@ -3628,14 +3628,14 @@ export function ReportPage() {
                               reportId: String(activeReport?.id ?? ""),
                             }}
                           >
-                            Choose a Plan
+                            Unlock Full Report
                           </Link>
                         </Button>
                       ) : (
                         <Button
                           onClick={() => setAuthOpen(true)}
                         >
-                          Sign in to unlock
+                          Unlock Full Report
                         </Button>
                       )}
                     </div>
@@ -4175,7 +4175,7 @@ export function ReportPage() {
                       reportId: String(activeReport?.id ?? ""),
                     }}
                   >
-                    Choose a Plan
+                    Unlock Full Report
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -4467,4 +4467,5 @@ export function ReportPage() {
     </>
   );
 }
+
 

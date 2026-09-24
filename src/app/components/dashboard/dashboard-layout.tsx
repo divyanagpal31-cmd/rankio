@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, FileText, CreditCard, Settings, LogOut, Menu, X, Home, Link as LinkIcon } from "lucide-react";
+import { LayoutDashboard, FileText, CreditCard, Settings, LogOut, Menu, X, Home } from "lucide-react";
 import darkLogo from "../../../assets/ec37bb065d49c41d8d194954cdc4226b5e7e1837.png";
 import { Button } from "../ui/button";
 import {
@@ -17,9 +17,8 @@ import { Footer } from "../footer";
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: FileText, label: "Reports", path: "/dashboard/reports" },
-  { icon: CreditCard, label: "Credits", path: "/dashboard/credits" },
-  { icon: LinkIcon, label: "Integrations", path: "/dashboard/integrations" },
-  { icon: Settings, label: "Profile Settings", path: "/dashboard/settings" },
+  { icon: CreditCard, label: "Plans & Billing", path: "/dashboard/credits" },
+  { icon: Settings, label: "My Profile", path: "/dashboard/settings" },
 ];
 
 export function DashboardLayout() {
@@ -90,7 +89,7 @@ export function DashboardLayout() {
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard/settings">
                       <Settings className="mr-2 h-4 w-4" />
-                      <span>Profile Settings</span>
+                      <span>My Profile</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />

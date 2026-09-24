@@ -82,6 +82,7 @@ export function MyWebsites() {
   const [scanComplete, setScanComplete] = useState(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const scanJobIdRef = useRef<string | null>(null);
+  const reportsListTopRef = useRef<HTMLDivElement | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "optimized" | "good" | "needs-improvement" | "processing" | "failed" | "pending">("all");
   const [websiteFilter, setWebsiteFilter] = useState<string>("all");
@@ -431,7 +432,7 @@ export function MyWebsites() {
           </Badge>
         );
       default:
-        return <Badge variant="outline">Pending</Badge>;
+        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Pending</Badge>;
     }
   };
 
@@ -501,6 +502,21 @@ export function MyWebsites() {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
+
+  const scrollToReportsTop = () => {
+    window.requestAnimationFrame(() => {
+      reportsListTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const goToReportsPage = (nextPage: number | ((page: number) => number)) => {
+    setCurrentPage((page) => {
+      const rawNextPage = typeof nextPage === "function" ? nextPage(page) : nextPage;
+      return Math.max(1, Math.min(rawNextPage, totalPages));
+    });
+    scrollToReportsTop();
+  };
+
   const renderPagination = () => {
     if (totalPages <= 1) return null;
 
@@ -513,7 +529,7 @@ export function MyWebsites() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+            onClick={() => goToReportsPage((page) => page - 1)}
             disabled={safeCurrentPage === 1}
           >
             Previous
@@ -523,7 +539,7 @@ export function MyWebsites() {
               key={page}
               variant={page === safeCurrentPage ? "default" : "outline"}
               size="sm"
-              onClick={() => setCurrentPage(page)}
+              onClick={() => goToReportsPage(page)}
             >
               {page}
             </Button>
@@ -531,7 +547,7 @@ export function MyWebsites() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+            onClick={() => goToReportsPage((page) => page + 1)}
             disabled={safeCurrentPage === totalPages}
           >
             Next
@@ -565,7 +581,7 @@ export function MyWebsites() {
           disabled={!user}
         >
           <Plus className="h-4 w-4" />
-          Add New Website
+          Analyze New Website
         </Button>
       </div>
 
@@ -634,6 +650,8 @@ export function MyWebsites() {
         </Card>
       )}
 
+      <div ref={reportsListTopRef} className="scroll-mt-24" />
+
       <div className="grid gap-4">
         {loading && <p className="text-muted-foreground">Loading reports...</p>}
         {actionError && <p className="text-sm text-red-500">{actionError}</p>}
@@ -646,9 +664,9 @@ export function MyWebsites() {
           const creditUsedLabel =
             reportLevel === "full"
               ? (website as any).latest_is_cached
-                ? "Credit used: No"
-                : "Credit used: Yes"
-              : "Credit used: No";
+                ? "Credits used: 0"
+                : "Credits used: 1"
+              : "Credits used: 0";
           const rescanCreditNote = freshReport
             ? "No credit used: latest report is under 24h old."
             : "Uses 1 report credit when a new full report is generated.";
@@ -678,11 +696,10 @@ export function MyWebsites() {
                       <h3 className="text-base font-semibold text-primary truncate">
                         {website.url}
                       </h3>
-                      <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-muted-foreground">
+                      <div className="mt-1 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center">
                         <div className="flex items-center gap-2">
                           <span>Status:</span>
                           {getStatusBadge(website.status)}
-                          <span className="hidden sm:inline">({formatStatusLabel(website.status)})</span>
                         </div>
                         <span className="hidden sm:inline text-muted-foreground/40">•</span>
                         <span>Last scan: {formatReadableDate(latestReportAt)}</span>
@@ -702,36 +719,45 @@ export function MyWebsites() {
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:gap-6">
                   <div className="flex items-center gap-3">
-                    <div className="relative h-16 w-16">
-                      <svg className="h-full w-full -rotate-90">
+                    <div className="relative h-20 w-20 shrink-0">
+                      <svg className="h-full w-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                         <circle
-                          cx="32"
-                          cy="32"
-                          r="28"
+                          cx="40"
+                          cy="40"
+                          r="32"
                           stroke="#e5e7eb"
-                          strokeWidth="6"
+                          strokeWidth="7"
                           fill="none"
                         />
                         <circle
-                          cx="32"
-                          cy="32"
-                          r="28"
+                          cx="40"
+                          cy="40"
+                          r="32"
                           stroke="#5B5BD6"
-                          strokeWidth="6"
+                          strokeWidth="7"
                           fill="none"
                           strokeLinecap="round"
-                          strokeDasharray={`${2 * Math.PI * 28 * (website.score ?? 0) / 100} ${2 * Math.PI * 28}`}
+                          strokeDasharray={`${2 * Math.PI * 32 * (website.score ?? 0) / 100} ${2 * Math.PI * 32}`}
                         />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-lg font-bold text-primary">
-                          {website.score ?? "-"}
+                        <span className="flex flex-col items-center leading-none text-primary">
+                          <span className="text-xl font-bold">{typeof website.score === "number" ? website.score : "-"}</span>
+                          {typeof website.score === "number" ? <span className="mt-0.5 text-[10px] font-semibold text-muted-foreground">/100</span> : null}
                         </span>
                       </div>
                     </div>
                     <div className="hidden md:block">
-                      <p className="text-xs text-muted-foreground">AI Score</p>
-                      {getStatusBadge(website.status)}
+                      <p className="text-xs text-muted-foreground">AI Visibility Score</p>
+                      <p className={`text-sm font-medium ${
+                        website.status === "optimized" || website.status === "completed"
+                          ? "text-green-600"
+                          : website.status === "good"
+                            ? "text-accent"
+                            : "text-orange-600"
+                      }`}>
+                        {formatStatusLabel(website.status)}
+                      </p>
                     </div>
                   </div>
 
@@ -802,7 +828,7 @@ export function MyWebsites() {
               disabled={!user}
             >
               <Plus className="h-4 w-4" />
-              Add New Website
+              Analyze New Website
             </Button>
           </CardContent>
         </Card>
@@ -968,8 +994,8 @@ export function MyWebsites() {
                         <p className="mt-1 truncate text-xs text-muted-foreground">Report ID: {report.id}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">AI Score</p>
-                        <p className="text-lg font-bold text-primary">{typeof report.ai_score === "number" ? report.ai_score : "-"}</p>
+                        <p className="text-xs text-muted-foreground">AI Visibility Score</p>
+                        <p className="text-lg font-bold text-primary">{typeof report.ai_score === "number" ? `${report.ai_score}/100` : "-"}</p>
                       </div>
                     </button>
                   );
@@ -1188,7 +1214,7 @@ export function MyWebsites() {
                     <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <p className="text-xs text-muted-foreground">AI</p>
-                        <p className="font-semibold text-primary">{typeof report.ai_score === "number" ? report.ai_score : "-"}</p>
+                        <p className="font-semibold text-primary">{typeof report.ai_score === "number" ? `${report.ai_score}/100` : "-"}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">SEO</p>
@@ -1273,3 +1299,5 @@ export function MyWebsites() {
     </div>
   );
 }
+
+

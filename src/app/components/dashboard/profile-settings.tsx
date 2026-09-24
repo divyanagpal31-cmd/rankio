@@ -328,7 +328,7 @@ export function ProfileSettings() {
       <div className="space-y-6 max-w-4xl">
         <div>
           <h1 className="text-3xl text-primary" style={{ fontWeight: 700 }}>
-            Profile Settings
+            My Profile
           </h1>
           <p className="text-muted-foreground mt-2">
             Update your personal information and security settings
@@ -351,7 +351,7 @@ export function ProfileSettings() {
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-3xl text-primary" style={{ fontWeight: 700 }}>
-          Profile Settings
+          My Profile
         </h1>
         <p className="text-muted-foreground mt-2">
           Update your personal information and security settings

@@ -14,13 +14,13 @@ import {
 } from "./ui/alert-dialog";
 
 const scanningSteps = [
-  { id: 1, message: "Connecting to website...", duration: 2000, icon: Globe },
-  { id: 2, message: "Fetching page structure...", duration: 2500, icon: FileText },
-  { id: 3, message: "Analyzing SEO signals...", duration: 3000, icon: Search },
-  { id: 4, message: "Evaluating structured data...", duration: 2500, icon: Database },
-  { id: 5, message: "Measuring UX clarity...", duration: 2000, icon: Grid3x3 },
-  { id: 6, message: "Calculating AI visibility score...", duration: 2500, icon: Brain },
-  { id: 7, message: "Generating personalized report...", duration: 2000, icon: FileText },
+  { id: 1, message: "Discovering website pages...", duration: 2000, icon: Globe },
+  { id: 2, message: "Checking technical SEO signals...", duration: 2500, icon: Search },
+  { id: 3, message: "Analyzing structured data...", duration: 3000, icon: Database },
+  { id: 4, message: "Reviewing content clarity and structure...", duration: 2500, icon: FileText },
+  { id: 5, message: "Evaluating AI visibility signals...", duration: 2000, icon: Brain },
+  { id: 6, message: "Calculating your website scores...", duration: 2500, icon: Grid3x3 },
+  { id: 7, message: "Preparing your personalized report...", duration: 2000, icon: FileText },
 ];
 
 const scanProgressThresholds = [5, 10, 20, 35, 45, 75, 100];
@@ -216,17 +216,17 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
 
           <div className="relative flex min-h-0 flex-1 flex-col p-5 sm:p-7">
             <div className="shrink-0 pr-1 text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a9a7ff]">AI visibility scan</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Building Your Report</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#a9a7ff]">AI Visibility Analysis</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Preparing Your Website Report</h2>
               <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-white/68">
-                We’ll open your report automatically when it’s ready.
+                We're analyzing your website and preparing your personalized insights. Your report will open automatically when it's ready.
               </p>
             </div>
 
             <div className="mx-auto mt-5 flex w-full max-w-xl shrink-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
               <Lock className="h-4 w-4 shrink-0 text-white/45" />
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">Scanning</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/40">Website being analyzed</p>
                 <p className="mt-1 truncate text-sm font-semibold text-white">{websiteUrl}</p>
               </div>
             </div>
@@ -292,8 +292,8 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
 
                 <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-center text-xs leading-5 text-amber-100">
                   {progress >= 100
-                    ? "Finalizing your report now. We’ll open it automatically as soon as it’s ready."
-                    : "Once the report is ready, we’ll take you there automatically."}
+                    ? "Almost there! We're putting the final insights together."
+                    : "Analysis time may vary depending on website size and accessibility."}
                 </div>
               </div>
 

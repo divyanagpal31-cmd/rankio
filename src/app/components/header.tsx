@@ -116,7 +116,7 @@ export function Header() {
                     <DropdownMenuItem asChild>
                       <Link to="/dashboard/settings">
                         <Settings className="mr-2 h-4 w-4" />
-                        <span>Profile Settings</span>
+                        <span>My Profile</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

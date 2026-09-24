@@ -120,9 +120,9 @@ export function Features() {
                 <ShoppingCart className="h-7 w-7" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-[18px] font-semibold text-[#20263a]">AI Visibility for Online Stores</h3>
-                  <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                <div className="flex items-start justify-between gap-2 sm:gap-3">
+                  <h3 className="min-w-0 flex-1 text-[18px] font-semibold leading-snug text-[#20263a]">AI Visibility for Online Stores</h3>
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-accent px-3 py-2 text-[11px] font-semibold leading-none text-white shadow-sm sm:px-3.5 sm:py-2 sm:text-xs">
                     Most Impact
                   </span>
                 </div>
@@ -240,3 +240,5 @@ export function Features() {
     </section>
   );
 }
+
+

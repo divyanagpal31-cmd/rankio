@@ -204,7 +204,7 @@ export function CreditsBilling() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl text-primary" style={{ fontWeight: 700 }}>
-          Plan & Billing
+          Plans & Billing
         </h1>
         <p className="text-muted-foreground mt-2">
           Choose a one-time package. Pay with PayPal and unlock the report credits you need.

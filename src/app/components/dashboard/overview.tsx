@@ -36,6 +36,7 @@ export function Overview() {
   const [scanComplete, setScanComplete] = useState(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const scanJobIdRef = useRef<string | null>(null);
+  const dashboardDisplayName = String((user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? "there").trim() || "there";
 
   const validateNewWebsiteUrl = (value: string) => {
     if (!value.trim()) return "Website URL is required";
@@ -118,27 +119,31 @@ export function Overview() {
 
   const cards = [
     {
-      title: "Total Websites Scanned",
+      title: "Websites Analyzed",
       value: String(stats.totalWebsites ?? 0),
+      description: "Unique websites",
       icon: Globe,
       color: "from-accent to-accent/70",
     },
     {
-      title: "Average AI Score",
+      title: "Average Visibility Score",
       value: String(stats.averageScore ?? 0),
       suffix: "/100",
+      description: "Across analyzed websites",
       icon: TrendingUp,
       color: "from-accent to-purple-600",
     },
     {
       title: "Active Plan",
       value: stats.activePlan ?? "No active package",
+      description: stats.activePlan && stats.activePlan !== "No active package" ? "Full reports available with credits" : "Upgrade to unlock full reports",
       icon: CreditCard,
       color: "from-green-500 to-emerald-600",
     },
     {
-      title: "Reports Generated",
+      title: "Reports Created",
       value: String(stats.reportsGenerated ?? 0),
+      description: "Preview and full reports",
       icon: FileText,
       color: "from-orange-500 to-amber-600",
     },
@@ -150,10 +155,10 @@ export function Overview() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl text-primary" style={{ fontWeight: 700 }}>
-            Welcome back, Alex
+            Welcome back, {dashboardDisplayName}
           </h1>
           <p className="text-muted-foreground mt-2">
-            Monitor your AI visibility and website performance.
+            Track your website visibility, review AI readiness insights, and identify opportunities for improvement.
           </p>
         </div>
         <Button
@@ -162,7 +167,7 @@ export function Overview() {
           disabled={!user}
         >
           <Plus className="h-4 w-4" />
-          Add New Website
+          Analyze New Website
         </Button>
       </div>
       {actionError && <p className="text-sm text-red-500">{actionError}</p>}
@@ -193,6 +198,7 @@ export function Overview() {
                     <span className="mb-0.5 text-sm text-muted-foreground">{stat.suffix}</span>
                   )}
                 </div>
+                {stat.description && <p className="mt-2 text-xs text-muted-foreground">{stat.description}</p>}
               </CardContent>
               {/* Subtle glow effect */}
               <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent pointer-events-none" />
@@ -218,6 +224,7 @@ export function Overview() {
           </div>
         </CardHeader>
         <CardContent>
+          <p className="mb-4 text-sm text-muted-foreground">Review your latest website analyses and report activity.</p>
           <div className="space-y-4">
             {(stats.recentScans ?? []).length === 0 ? (
               <div className="p-6 rounded-lg border border-border/40 text-sm text-muted-foreground">
@@ -240,33 +247,36 @@ export function Overview() {
                   <div className="flex items-center gap-4">
                     {/* AI Score Circle */}
                     <div className="flex items-center gap-2">
-                      <div className="relative h-12 w-12">
-                        <svg className="h-full w-full -rotate-90">
+                      <div className="relative h-16 w-16 shrink-0">
+                        <svg className="h-full w-full -rotate-90" viewBox="0 0 64 64" aria-hidden="true">
                           <circle
-                            cx="24"
-                            cy="24"
-                            r="20"
+                            cx="32"
+                            cy="32"
+                            r="26"
                             stroke="#e5e7eb"
-                            strokeWidth="4"
+                            strokeWidth="5"
                             fill="none"
                           />
                           <circle
-                            cx="24"
-                            cy="24"
-                            r="20"
+                            cx="32"
+                            cy="32"
+                            r="26"
                             stroke="#5B5BD6"
-                            strokeWidth="4"
+                            strokeWidth="5"
                             fill="none"
                             strokeLinecap="round"
-                            strokeDasharray={`${2 * Math.PI * 20 * (scan.score / 100)} ${2 * Math.PI * 20}`}
+                            strokeDasharray={`${2 * Math.PI * 26 * (scan.score / 100)} ${2 * Math.PI * 26}`}
                           />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs font-semibold text-primary">{scan.score}</span>
+                          <span className="flex flex-col items-center leading-none text-primary">
+                            <span className="text-base font-bold">{scan.score}</span>
+                            <span className="mt-0.5 text-[9px] font-semibold text-muted-foreground">/100</span>
+                          </span>
                         </div>
                       </div>
                       <div className="hidden sm:block">
-                        <p className="text-xs text-muted-foreground">AI Score</p>
+                        <p className="text-xs text-muted-foreground">AI Visibility Score</p>
                         <p
                           className={`text-sm font-medium ${
                             scan.status === "Optimized"
@@ -369,3 +379,5 @@ export function Overview() {
     </div>
   );
 }
+
+

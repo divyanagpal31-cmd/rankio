@@ -1524,6 +1524,239 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+
+function copyComputedStyles(source: Element, target: Element) {
+  if (!(source instanceof HTMLElement || source instanceof SVGElement) || !(target instanceof HTMLElement || target instanceof SVGElement)) {
+    return;
+  }
+
+  const computed = window.getComputedStyle(source);
+  const style = target instanceof HTMLElement || target instanceof SVGElement ? target.style : null;
+  if (style) {
+    for (const property of Array.from(computed)) {
+      style.setProperty(property, computed.getPropertyValue(property), computed.getPropertyPriority(property));
+    }
+  }
+
+  const sourceChildren = Array.from(source.children);
+  const targetChildren = Array.from(target.children);
+  sourceChildren.forEach((child, index) => {
+    const targetChild = targetChildren[index];
+    if (targetChild) copyComputedStyles(child, targetChild);
+  });
+}
+
+function absolutizeCloneUrls(clone: HTMLElement) {
+  clone.querySelectorAll<HTMLImageElement>("img").forEach((image) => {
+    const src = image.getAttribute("src");
+    if (!src) return;
+    try {
+      image.setAttribute("src", new URL(src, window.location.origin).href);
+    } catch {
+      // Keep the original source if URL parsing fails.
+    }
+  });
+}
+
+function serializeSvgMarkup(markup: string) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+}
+
+function binaryFromBase64(base64: string) {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function escapePdfName(value: string) {
+  return value.replace(/[^A-Za-z0-9]/g, "");
+}
+
+function concatBytes(...parts: Uint8Array[]) {
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+
+  parts.forEach((part) => {
+    output.set(part, offset);
+    offset += part.length;
+  });
+
+  return output;
+}
+
+function buildImagePdfBlob(images: Array<{ dataUrl: string; width: number; height: number }>) {
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const encoder = new TextEncoder();
+  const objects: Array<string | Uint8Array> = [];
+  const addObject = (body: string | Uint8Array) => {
+    objects.push(body);
+    return objects.length;
+  };
+
+  const catalogId = addObject("<< /Type /Catalog /Pages 2 0 R >>");
+  const pagesObjectIndex = objects.length;
+  objects.push("");
+  const pageIds: number[] = [];
+
+  images.forEach((image, index) => {
+    const imageName = escapePdfName(`Im${index + 1}`);
+    const base64 = image.dataUrl.split(",")[1] ?? "";
+    const imageBytes = binaryFromBase64(base64);
+    const imageHeader = encoder.encode(
+      `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`
+    );
+    const imageFooter = encoder.encode("\nendstream");
+    const imageId = addObject(concatBytes(imageHeader, imageBytes, imageFooter));
+    const content = `q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/${imageName} Do\nQ`;
+    const contentId = addObject(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    const pageId = addObject(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /${imageName} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`
+    );
+    pageIds.push(pageId);
+  });
+
+  objects[pagesObjectIndex] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+
+  const chunks: Uint8Array[] = [encoder.encode("%PDF-1.4\n")];
+  const offsets = [0];
+  let length = chunks[0].length;
+
+  const pushString = (value: string) => {
+    const bytes = encoder.encode(value);
+    chunks.push(bytes);
+    length += bytes.length;
+  };
+
+  const pushBytes = (bytes: Uint8Array) => {
+    chunks.push(bytes);
+    length += bytes.length;
+  };
+
+  objects.forEach((object, index) => {
+    offsets.push(length);
+    pushString(`${index + 1} 0 obj\n`);
+    if (object instanceof Uint8Array) pushBytes(object);
+    else pushString(object);
+    pushString("\nendobj\n");
+  });
+
+  const xrefOffset = length;
+  pushString(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`);
+  for (let index = 1; index < offsets.length; index += 1) {
+    pushString(`${String(offsets[index]).padStart(10, "0")} 00000 n \n`);
+  }
+  pushString(`trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+  return new Blob(chunks, { type: "application/pdf" });
+}
+
+async function renderReportSliceToJpeg(element: HTMLElement, options: { offsetY: number; sliceHeight: number; width: number; scale: number }) {
+  const clone = element.cloneNode(true) as HTMLElement;
+  copyComputedStyles(element, clone);
+  absolutizeCloneUrls(clone);
+  clone.querySelectorAll(".report-pdf-exclude").forEach((node) => node.remove());
+  clone.style.width = `${options.width}px`;
+  clone.style.maxWidth = `${options.width}px`;
+  clone.style.margin = "0";
+  clone.style.transform = `translateY(-${options.offsetY}px)`;
+  clone.style.transformOrigin = "top left";
+
+  const html = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.sliceHeight}" viewBox="0 0 ${options.width} ${options.sliceHeight}">
+      <foreignObject width="100%" height="100%">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="width:${options.width}px;height:${options.sliceHeight}px;overflow:hidden;background:#071225;">
+          ${clone.outerHTML}
+        </div>
+      </foreignObject>
+    </svg>`;
+
+  const svgUrl = serializeSvgMarkup(html);
+  const image = new Image();
+  image.decoding = "async";
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Unable to render report section for PDF export."));
+      image.src = svgUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(options.width * options.scale);
+    canvas.height = Math.ceil(options.sliceHeight * options.scale);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Unable to prepare PDF canvas.");
+
+    context.fillStyle = "#071225";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return {
+      dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+      width: canvas.width,
+      height: canvas.height,
+    };
+  } finally {
+    // Data URLs do not need explicit cleanup.
+  }
+}
+
+async function buildVisualReportPdfBlob(element: HTMLElement) {
+  await document.fonts?.ready;
+
+  const rect = element.getBoundingClientRect();
+  const width = Math.ceil(rect.width || element.scrollWidth || 1000);
+  const pagePaddingX = 44;
+  const pagePaddingY = 44;
+  const pageWidth = width + pagePaddingX * 2;
+  const pageHeight = Math.ceil(pageWidth * (842 / 595));
+  const contentHeight = pageHeight - pagePaddingY * 2;
+  const totalHeight = Math.ceil(element.scrollHeight || rect.height);
+  const scale = Math.min(2, Math.max(1.25, window.devicePixelRatio || 1));
+  const images: Array<{ dataUrl: string; width: number; height: number }> = [];
+
+  for (let offsetY = 0; offsetY < totalHeight; offsetY += contentHeight) {
+    const sliceHeight = Math.min(contentHeight, totalHeight - offsetY);
+    const image = await renderReportSliceToJpeg(element, {
+      offsetY,
+      sliceHeight,
+      width,
+      scale,
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(pageWidth * scale);
+    canvas.height = Math.ceil(pageHeight * scale);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Unable to prepare PDF page canvas.");
+
+    context.fillStyle = "#071225";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    const sectionImage = new Image();
+    await new Promise<void>((resolve, reject) => {
+      sectionImage.onload = () => resolve();
+      sectionImage.onerror = () => reject(new Error("Unable to compose PDF page."));
+      sectionImage.src = image.dataUrl;
+    });
+    context.drawImage(sectionImage, pagePaddingX * scale, pagePaddingY * scale);
+
+    images.push({
+      dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+      width: canvas.width,
+      height: canvas.height,
+    });
+  }
+
+  return buildImagePdfBlob(images);
+}
+
+
 function buildReportPdfBlob({
   title,
   website,
@@ -1764,6 +1997,7 @@ export function ReportPage() {
   const [leavePreviewOpen, setLeavePreviewOpen] = useState(false);
   const [rescanning, setRescanning] = useState(false);
   const [rescanMessage, setRescanMessage] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [recentReportDialogOpen, setRecentReportDialogOpen] = useState(false);
   const [recentReportTarget, setRecentReportTarget] = useState<any | null>(null);
   const [callbackOpen, setCallbackOpen] = useState(false);
@@ -3077,27 +3311,28 @@ export function ReportPage() {
   const callbackNameReadonly = Boolean(savedUserName);
   const callbackEmailReadonly = Boolean(savedUserEmail);
 
-  const handleExport = () => {
-    if (typeof window === "undefined") return;
-    const generatedAtLabel = activeReportGeneratedAt ? new Date(activeReportGeneratedAt).toLocaleDateString() : "Current report";
-    const reportTypeLabel = reportLevelValue === "full" ? "Full Report" : "Preview Report";
-    const blob = buildReportPdfBlob({
-      title: reportDisplayTitle,
-      website: displayHost,
-      reportType: reportTypeLabel,
-      generatedAt: generatedAtLabel,
-      score: overallScore,
-      maturity: maturityLabel(overallScore),
-      summary: reportDisplaySummary,
-      categoryScores,
-      topIssues: topIssueCards,
-      auditSections,
-      implementationIssues: implementationIssueCards,
-      roadmapBuckets,
-    });
+  const handleExport = async () => {
+    if (typeof window === "undefined" || exportingPdf) return;
 
-    downloadBlob(blob, pdfFileName(`Rankio AI Report ${displayHost}`));
-    setRescanMessage("PDF downloaded successfully.");
+    const target = document.querySelector<HTMLElement>(".report-export-content");
+    if (!target) {
+      setRescanMessage("Unable to prepare the PDF export right now. Please refresh and try again.");
+      return;
+    }
+
+    setExportingPdf(true);
+    setRescanMessage("Preparing visual PDF export...");
+
+    try {
+      const blob = await buildVisualReportPdfBlob(target);
+      downloadBlob(blob, pdfFileName(`Rankio AI Report ${displayHost}`));
+      setRescanMessage("PDF downloaded successfully.");
+    } catch (error) {
+      console.error("visual pdf export failed", error);
+      setRescanMessage("Unable to export the visual PDF right now. Please try again.");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const handleImplementationStrategy = () => {
@@ -3353,9 +3588,10 @@ export function ReportPage() {
                     <Button
                       onClick={handleExport}
                       size="sm"
+                      disabled={exportingPdf}
                       className="gap-2"
                     >
-                      Export to PDF
+                      {exportingPdf ? "Preparing PDF..." : "Export to PDF"}
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   )}
@@ -3607,7 +3843,7 @@ export function ReportPage() {
                 </div>
 
                 {isGuest ? (
-                  <div className="mt-8 rounded-[24px] border border-accent/35 bg-[radial-gradient(circle_at_top_left,hsl(var(--accent)/0.24),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.09)_0%,rgba(255,255,255,0.035)_100%)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)] md:p-6">
+                  <div className="report-pdf-exclude mt-8 rounded-[24px] border border-accent/35 bg-[radial-gradient(circle_at_top_left,hsl(var(--accent)/0.24),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.09)_0%,rgba(255,255,255,0.035)_100%)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.24)] md:p-6">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-accent/35 bg-accent/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-accent-foreground">
@@ -4083,7 +4319,7 @@ export function ReportPage() {
                   </div>
                 </div>
 
-                <div className="mt-8 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(122,116,239,0.15)_0%,rgba(255,255,255,0.03)_100%)] p-6 md:p-8">
+                <div className="report-pdf-exclude mt-8 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(122,116,239,0.15)_0%,rgba(255,255,255,0.03)_100%)] p-6 md:p-8">
                   <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-center xl:grid-cols-[minmax(0,1fr)_280px]">
                     <div className="max-w-3xl">
                       <div className="flex items-center gap-2 text-[#d8cbff]">

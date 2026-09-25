@@ -28,3 +28,11 @@ verify_jwt = false
 [functions.claim-visitor]
 # Allow authenticated users to claim reports created during a logged-out scan.
 verify_jwt = true
+
+[auth.email]
+otp_length = 8
+otp_expiry = 300
+
+[auth.email.template.magic_link]
+subject = "Your One Time Password for Rankio"
+content_path = "./supabase/templates/magic_link.html"

@@ -14,7 +14,7 @@ import {
 } from "./ui/alert-dialog";
 
 const scanningSteps = [
-  { id: 1, message: "Discovering website pages...", duration: 2000, icon: Globe },
+  { id: 1, message: "Checking website access...", duration: 9000, icon: Globe },
   { id: 2, message: "Checking technical SEO signals...", duration: 2500, icon: Search },
   { id: 3, message: "Analyzing structured data...", duration: 3000, icon: Database },
   { id: 4, message: "Reviewing content clarity and structure...", duration: 2500, icon: FileText },

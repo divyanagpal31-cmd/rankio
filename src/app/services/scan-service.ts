@@ -28,8 +28,27 @@ type CancelScanOptions = {
   accessToken?: string | null;
 };
 
-function toFriendlyScanError(message: string) {
-  const normalized = message.trim().toLowerCase();
+function toFriendlyScanError(message: string, code?: string) {
+  const originalMessage = String(message ?? "").trim();
+  const normalizedCode = String(code ?? "").trim().toUpperCase();
+  switch (normalizedCode) {
+    case "DOMAIN_NOT_REACHABLE":
+      return "This domain is not reachable yet. Please check the DNS or hosting setup and try again after the website is live.";
+    case "WEBSITE_NOT_LIVE":
+      return "We reached the domain, but no active website content is available to scan. Please publish the website and try again.";
+    case "WEBSITE_BLOCKED":
+      return "This website is blocking access to the scan. Please allow public access or update the site security settings, then try again.";
+    case "WEBSITE_TIMEOUT":
+      return "The website did not respond in time. Please check that the website is online and try again.";
+    case "WEBSITE_SERVER_ERROR":
+      return "The website server returned an error. Please check the hosting/server status and try again after it is fixed.";
+    case "WEBSITE_NOT_SCANNABLE":
+      return "This URL does not look like a readable website page. Please enter the main website URL and try again.";
+    case "WEBSITE_NOT_REACHABLE":
+      return "We could not reach this website. Please check that the site is online and accessible in a browser, then try again.";
+  }
+
+  const normalized = originalMessage.toLowerCase();
 
   if (
     normalized.includes("name or service not known") ||
@@ -37,7 +56,7 @@ function toFriendlyScanError(message: string) {
     normalized.includes("dns") ||
     normalized.includes("enotfound")
   ) {
-    return "We couldn’t reach that website. Please check the URL and try again.";
+    return "We could not reach that website. Please check the URL and try again.";
   }
 
   if (
@@ -56,7 +75,26 @@ function toFriendlyScanError(message: string) {
     return "The scan took too long to start. Please try again in a moment.";
   }
 
-  return "We couldn’t scan that website right now. Please try again.";
+  if (
+    normalized.includes("bot protection") ||
+    normalized.includes("security check") ||
+    normalized.includes("captcha") ||
+    normalized.includes("not a robot") ||
+    normalized.includes("access denied") ||
+    normalized.includes("request blocked") ||
+    normalized.includes("blocked access") ||
+    normalized.includes("blocking access") ||
+    normalized.includes("automated access") ||
+    normalized.includes("robot check")
+  ) {
+    return "This website is blocking access to the scan. Please allow public access or update the site security settings, then try again.";
+  }
+
+  if (originalMessage && !/^edge function returned a non-2xx status code$/i.test(originalMessage)) {
+    return originalMessage;
+  }
+
+  return "We could not scan that website right now. Please try again.";
 }
 
 /**
@@ -114,7 +152,7 @@ export async function runScan(url: string, options: RunScanOptions = {}): Promis
             const msg = message || code;
             if (code && details) {
               return {
-                error: toFriendlyScanError(msg ? `${msg}: ${details}` : details),
+                error: toFriendlyScanError(msg ? `${msg}: ${details}` : details, code),
                 errorCode: code,
                 status,
                 limit,
@@ -124,7 +162,7 @@ export async function runScan(url: string, options: RunScanOptions = {}): Promis
             }
             if (code) {
               return {
-                error: toFriendlyScanError(msg || code),
+                error: toFriendlyScanError(msg || code, code),
                 errorCode: code,
                 status,
                 limit,

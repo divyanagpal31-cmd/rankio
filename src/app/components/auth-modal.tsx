@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useState, useEffect, useRef } from "react";
-import { Mail, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Mail, ShieldCheck } from "lucide-react";
 import { useAuth } from "../providers/auth-provider";
 import { useNavigate } from "react-router";
 
@@ -13,9 +13,15 @@ interface AuthModalProps {
   redirectTo?: string;
 }
 
+const OTP_VALID_SECONDS = 300;
 const OTP_COOLDOWN_SECONDS = 60;
 const OTP_RATE_LIMIT_COOLDOWN_SECONDS = 300;
 const otpSendInFlight = new Set<string>();
+
+function formatOtpMinutes(seconds: number) {
+  const minutes = Math.max(Math.ceil(seconds / 60), 1);
+  return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+}
 
 function getOtpCooldownStorageKey(email: string) {
   return `rankio.otp.cooldown.${email.trim().toLowerCase()}`;
@@ -31,12 +37,16 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
   const sendLockRef = useRef(false);
   const navigate = useNavigate();
 
   const cooldownRemainingSeconds =
     cooldownUntil == null ? 0 : Math.max(Math.ceil((cooldownUntil - Date.now()) / 1000), 0);
+  const otpRemainingSeconds =
+    otpExpiresAt == null ? 0 : Math.max(Math.ceil((otpExpiresAt - Date.now()) / 1000), 0);
   const isCooldownActive = cooldownRemainingSeconds > 0;
+  const isOtpExpired = phase === "verify" && otpExpiresAt !== null && otpRemainingSeconds <= 0;
 
   useEffect(() => {
     if (!cooldownUntil) return;
@@ -55,6 +65,19 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
   }, [cooldownUntil]);
 
   useEffect(() => {
+    if (!otpExpiresAt) return;
+    if (otpExpiresAt <= Date.now()) return;
+
+    const timer = window.setInterval(() => {
+      if (otpExpiresAt <= Date.now()) {
+        setOtpExpiresAt(null);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [otpExpiresAt]);
+
+  useEffect(() => {
     if (!open) {
       setFullName("");
       setEmail("");
@@ -62,6 +85,7 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
       setSubmitting(false);
       setError(null);
       setSent(false);
+      setOtpExpiresAt(null);
       setPhase("send");
     }
   }, [open]);
@@ -113,6 +137,7 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
         }
       } else {
         setSent(true);
+        setOtpExpiresAt(Date.now() + OTP_VALID_SECONDS * 1000);
         setPhase("verify");
         startCooldown(OTP_COOLDOWN_SECONDS);
       }
@@ -124,6 +149,11 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
   };
 
   const handleVerify = async () => {
+    if (isOtpExpired) {
+      setError("This OTP has expired. Please request a new code.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     const { error } = await verifyEmailOtp(email, code);
@@ -156,7 +186,7 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
               handleSend();
               return;
             }
-            if (code.length !== 8) return;
+            if (code.length !== 8 || isOtpExpired) return;
             handleVerify();
           }}
         >
@@ -198,10 +228,13 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
               />
-              <p className="text-xs text-muted-foreground">We sent an 8-digit code to {email}.</p>
+              <p className="text-xs text-muted-foreground">
+                We sent an 8-digit code to {email}. It is valid for the next {otpRemainingSeconds > 0 ? formatOtpMinutes(otpRemainingSeconds) : "5 minutes"}.
+              </p>
+              {isOtpExpired ? <p className="text-xs font-medium text-red-600">This OTP has expired. Please request a new code.</p> : null}
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-muted-foreground">
-                  {isCooldownActive ? `You can request a new OTP in ${cooldownRemainingSeconds}s.` : "Didn't get it?"}
+                  {isCooldownActive ? `You can request a new OTP in ${formatOtpMinutes(cooldownRemainingSeconds)}.` : "Didn't get it?"}
                 </span>
                 <button
                   type="button"
@@ -216,13 +249,6 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
           )}
 
           {error && <p className="text-sm text-red-500">{error}</p>}
-          {sent && !error && (
-            <div className="flex items-center gap-2 text-green-600 text-sm">
-              <CheckCircle2 className="h-4 w-4" />
-              Check your email for the OTP to finish signing in.
-            </div>
-          )}
-
           {phase === "send" && (
             <Button
               type="submit"
@@ -230,14 +256,14 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
               className="w-full"
             >
               <Mail className="h-4 w-4 mr-2" />
-              {submitting ? "Sending..." : isCooldownActive ? `Try again in ${cooldownRemainingSeconds}s` : "Send OTP"}
+              {submitting ? "Sending..." : isCooldownActive ? `Try again in ${formatOtpMinutes(cooldownRemainingSeconds)}` : "Send OTP"}
             </Button>
           )}
 
           {phase === "verify" && (
             <Button
               type="submit"
-              disabled={code.length !== 8 || submitting}
+              disabled={code.length !== 8 || submitting || isOtpExpired}
               className="w-full"
             >
               <ShieldCheck className="h-4 w-4 mr-2" />
@@ -245,9 +271,11 @@ export function AuthModal({ open, onOpenChange, redirectTo }: AuthModalProps) {
             </Button>
           )}
 
-          <p className="text-xs text-muted-foreground">
-            We'll email you a one-time 8-digit code. No password needed.
-          </p>
+          {phase === "send" && (
+            <p className="text-xs text-muted-foreground">
+              We'll email you a one-time 8-digit code. The OTP is valid for 5 minutes.
+            </p>
+          )}
         </form>
       </DialogContent>
     </Dialog>

@@ -1377,6 +1377,205 @@ function isLikelyHtmlResponse(contentType: string | null, html: string): boolean
   if (normalized.includes("xml") || normalized.includes("json") || normalized.includes("text/plain")) return false;
   return /<!doctype\s+html|<html[\s>]/i.test(html);
 }
+
+function scanErrorResponse(error: string, message: string, status = 422, details?: string | null) {
+  return new Response(JSON.stringify({ error, message, details: details ?? null }), {
+    status,
+    headers: { "Content-Type": "application/json", ...corsHeaders },
+  });
+}
+
+type SiteReadinessCheck =
+  | { ok: true }
+  | { ok: false; error: string; message: string; details?: string | null; status?: number };
+
+function classifyFetchFailure(error: unknown): SiteReadinessCheck {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("abort") || normalized.includes("timed out") || normalized.includes("timeout")) {
+    return {
+      ok: false,
+      error: "WEBSITE_TIMEOUT",
+      message: "The website did not respond in time. Please check that the website is online and try again.",
+      details: message,
+    };
+  }
+
+  if (
+    normalized.includes("dns") ||
+    normalized.includes("enotfound") ||
+    normalized.includes("name or service not known") ||
+    normalized.includes("failed to lookup address information") ||
+    normalized.includes("no such host")
+  ) {
+    return {
+      ok: false,
+      error: "DOMAIN_NOT_REACHABLE",
+      message: "This domain is not reachable yet. Please check the DNS or hosting setup and try again after the website is live.",
+      details: message,
+    };
+  }
+
+  return {
+    ok: false,
+    error: "WEBSITE_NOT_REACHABLE",
+    message: "We could not reach this website. Please check that the site is online and accessible in a browser, then try again.",
+    details: message,
+  };
+}
+
+function htmlToPlainText(html: string): string {
+  return String(html ?? "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikeParkedOrDefaultPage(html: string, wordCount: number, title: string | null): boolean {
+  const text = htmlToPlainText(html).toLowerCase();
+  const titleText = String(title ?? "").toLowerCase();
+  const combined = `${titleText} ${text}`;
+  const parkedSignals = [
+    "domain is parked",
+    "parked domain",
+    "this domain is parked",
+    "this domain has been registered",
+    "domain has been registered",
+    "future home of",
+    "coming soon",
+    "under construction",
+    "site not published",
+    "website coming soon",
+    "default web site page",
+    "default website page",
+    "apache2 default page",
+    "welcome to nginx",
+    "plesk default page",
+    "cpanel default page",
+    "index of /",
+  ];
+
+  return wordCount < 160 && parkedSignals.some((signal) => combined.includes(signal));
+}
+
+function looksLikeBotProtectionPage(html: string, title: string | null): boolean {
+  const text = htmlToPlainText(html).toLowerCase();
+  const titleText = String(title ?? "").toLowerCase();
+  const combined = `${titleText} ${text}`;
+  const botProtectionSignals = [
+    "verify that you're not a robot",
+    "verify that you are not a robot",
+    "not a robot",
+    "captcha",
+    "security check",
+    "bot protection",
+    "access denied",
+    "request blocked",
+    "unusual traffic",
+    "enable javascript and cookies",
+    "enable javascript",
+    "checking your browser",
+    "cloudflare ray id",
+    "attention required",
+    "please verify you are a human",
+    "human verification",
+    "automated access",
+    "robot check",
+  ];
+
+  return botProtectionSignals.some((signal) => combined.includes(signal));
+}
+
+async function checkSiteReadiness(normalizedUrl: string): Promise<SiteReadinessCheck> {
+  let homepageResult: Awaited<ReturnType<typeof fetchText>>;
+  try {
+    homepageResult = await fetchText(normalizedUrl, 9000);
+  } catch (error) {
+    return classifyFetchFailure(error);
+  }
+
+  const status = homepageResult.status;
+  const html = homepageResult.text;
+  const title = extractTitle(html);
+
+  if (looksLikeBotProtectionPage(html, title)) {
+    return {
+      ok: false,
+      error: "WEBSITE_BLOCKED",
+      message: "This website is using bot protection or security checks, so Rankio could not access the page content. Please allow public crawler access or try another website.",
+      status,
+    };
+  }
+
+  if (status === 401 || status === 403 || status === 429) {
+    return {
+      ok: false,
+      error: "WEBSITE_BLOCKED",
+      message: "This website is blocking access to the scan. Please allow public access or try again after the site security settings are updated.",
+      status,
+    };
+  }
+
+  if (status === 404) {
+    return {
+      ok: false,
+      error: "WEBSITE_NOT_LIVE",
+      message: "We reached the domain, but no active website page was found. Please publish the website and try again.",
+      status,
+    };
+  }
+
+  if (status >= 500) {
+    return {
+      ok: false,
+      error: "WEBSITE_SERVER_ERROR",
+      message: "The website server returned an error. Please check the hosting/server status and try again after it is fixed.",
+      status,
+    };
+  }
+
+  if (!homepageResult.ok) {
+    return {
+      ok: false,
+      error: "WEBSITE_NOT_REACHABLE",
+      message: "We reached the domain, but the website did not return a scannable page. Please check the website and try again.",
+      status,
+    };
+  }
+
+  if (!isLikelyContentPageUrl(normalizedUrl) || !isLikelyHtmlResponse(homepageResult.contentType, html)) {
+    return {
+      ok: false,
+      error: "WEBSITE_NOT_SCANNABLE",
+      message: "This URL does not look like a readable website page. Please enter the main website URL and try again.",
+      status,
+    };
+  }
+
+  const wordData = extractWordCount(html);
+  const hasMeaningfulSignals = Boolean(title) || wordData.wordCount >= 30 || extractHeadings(html, "h1").length > 0;
+
+  if (!hasMeaningfulSignals || looksLikeParkedOrDefaultPage(html, wordData.wordCount, title)) {
+    return {
+      ok: false,
+      error: "WEBSITE_NOT_LIVE",
+      message: "We reached the domain, but no active website content is available to scan. Please publish the website and try again.",
+      status,
+    };
+  }
+
+  return { ok: true };
+}
 function parseSitemapUrls(xml: string, baseUrl: string): string[] {
   const urls: string[] = [];
   const regex = /<loc>([^<]+)<\/loc>/gi;
@@ -2393,6 +2592,11 @@ serve(async (req) => {
       status: 400,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
+  }
+
+  const readiness = await checkSiteReadiness(normalized);
+  if (!readiness.ok) {
+    return scanErrorResponse(readiness.error, readiness.message, 422, readiness.details ?? (readiness.status ? `HTTP ${readiness.status}` : null));
   }
 
   const freshSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

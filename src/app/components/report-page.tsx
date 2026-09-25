@@ -59,6 +59,7 @@ import { ScanningModal } from "./scanning-modal";
 import { isScanStateStale } from "../services/scan-staleness";
 import { getVisitorId } from "../services/visitor-id";
 import { TurnstileWidget, isCaptchaEnabled } from "./turnstile-widget";
+import { openTawkChat } from "../services/tawk-service";
 
 type ReportRow = {
   parameter: string;
@@ -4111,6 +4112,7 @@ export function ReportPage() {
                         variant="outline"
                         size="lg"
                         className="w-full justify-center"
+                        onClick={openTawkChat}
                       >
                         Live chat
                       </Button>

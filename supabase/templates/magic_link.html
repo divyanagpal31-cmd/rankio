@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your login code for Rankio</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f6f6ff;font-family:Arial,Helvetica,sans-serif;color:#1f2440;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f6ff;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #d9ddf6;border-radius:18px;overflow:hidden;box-shadow:0 16px 40px rgba(89,95,201,0.10);">
+            <tr>
+              <td style="background:#ffffff;padding:28px 32px;text-align:center;border-bottom:1px solid #eef0ff;">
+                <img
+                  src="https://rankio-tau.vercel.app/rankio-logo.png"
+                  alt="Rankio"
+                  width="180"
+                  style="display:block;margin:0 auto;max-width:180px;height:auto;"
+                />
+              </td>
+            </tr>
+
+            <tr>
+              <td style="background:linear-gradient(90deg,#5d67dc 0%,#4046a9 100%);height:6px;line-height:6px;font-size:0;">
+                &nbsp;
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:34px 32px 30px;">
+                <h1 style="margin:0 0 14px;font-size:30px;line-height:1.15;font-weight:800;color:#1f2440;">
+                  Your login code
+                </h1>
+
+                <p style="margin:0 0 22px;font-size:16px;line-height:1.7;color:#607089;">
+                  Enter this one-time code to sign in to your Rankio account.
+                </p>
+
+                <div style="margin:0 0 14px;padding:18px 20px;background:#eef0ff;border:1px solid #d9ddf6;border-radius:16px;text-align:center;">
+                  <div style="font-size:36px;line-height:1;font-weight:800;letter-spacing:0.18em;color:#4046a9;">
+                    {{ .Token }}
+                  </div>
+                </div>
+
+                <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#607089;">
+                  This OTP is valid for the next 5 minutes.
+                </p>
+
+                <p style="margin:0 0 12px;font-size:14px;line-height:1.7;color:#607089;">
+                  Hi{{ if .Email }} {{ .Email }}{{ end }},
+                </p>
+
+                <p style="margin:0 0 18px;font-size:14px;line-height:1.7;color:#607089;">
+                  If you didn’t request this code, you can safely ignore this email.
+                </p>
+
+                <div style="padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">
+                    Need help? Contact
+                    <a href="mailto:support@rankio.ai" style="color:#5d67dc;text-decoration:none;font-weight:700;">
+                      support@rankio.ai
+                    </a>
+                    .
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

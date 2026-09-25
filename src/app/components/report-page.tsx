@@ -3649,7 +3649,6 @@ export function ReportPage() {
             <aside className="report-sidebar hidden lg:block">
               <div className="sticky top-[7.5rem] rounded-[24px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
                 <p className="text-[24px] font-semibold tracking-tight text-white">Rankio Intelligence</p>
-                <p className="mt-1 text-sm text-white/45">v2.4 Ready</p>
 
                 <nav className="mt-8 space-y-2">
                   {[

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../providers/auth-provider";
 import { formatReadableDate } from "./date-format";
-import { paymentPlans } from "./payment-plans";
+import { getPaymentPlanName } from "./payment-plans";
 
 type Website = {
   id: string;
@@ -441,11 +441,9 @@ export function useStats() {
 
       const subscriptionRow = subsRes.data as Subscription | null;
       const activePlanSlug = String(subscriptionRow?.plan_slug ?? subscriptionRow?.plan ?? "").trim().toLowerCase();
-      const activePlan =
-        paymentPlans.find((plan) => plan.id === activePlanSlug)?.name ??
-        subscriptionRow?.plan_name ??
-        subscriptionRow?.plan ??
-        (subscriptionRow?.plan_slug ? String(subscriptionRow.plan_slug).toUpperCase() : "No active package");
+      const activePlan = activePlanSlug
+        ? getPaymentPlanName(activePlanSlug, subscriptionRow?.plan_name ?? subscriptionRow?.plan ?? null)
+        : subscriptionRow?.plan_name ?? subscriptionRow?.plan ?? "No active package";
 
       const nextStats = {
         totalWebsites,

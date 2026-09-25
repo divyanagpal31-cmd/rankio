@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useAuth } from "../../providers/auth-provider";
 import { supabase } from "../../../lib/supabase";
 import { getVisitorId } from "../../services/visitor-id";
-import { paymentPlans, type PaymentPlanId, type PayPalCheckoutPlanId } from "../../services/payment-plans";
+import { getPaymentPlanName, paymentPlans, type PaymentPlanId, type PayPalCheckoutPlanId } from "../../services/payment-plans";
 import { startPayPalCheckout } from "../../services/paypal-service";
 import { formatReadableDate } from "../../services/date-format";
 import { billingFaqs } from "../../data/faq-content";
@@ -161,10 +161,7 @@ export function CreditsBilling() {
     return status ? status.charAt(0).toUpperCase() + status.slice(1) : "-";
   };
 
-  const formatPlan = (value?: string | null) => {
-    const plan = String(value ?? "").trim();
-    return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "-";
-  };
+  const formatPlan = (value?: string | null, fallback?: string | null) => getPaymentPlanName(value, fallback);
 
   const formatCurrency = (amount?: number | string | null, currency?: string | null) => {
     const parsed = typeof amount === "number" ? amount : Number(amount ?? NaN);
@@ -198,7 +195,7 @@ export function CreditsBilling() {
 
   const activePlanName = activePlanId
     ? paymentPlans.find((plan) => plan.id === activePlanId)?.name
-    : subscription?.plan ?? subscription?.plan_name ?? null;
+    : getPaymentPlanName(subscription?.plan_slug ?? subscription?.plan ?? null, subscription?.plan_name ?? null);
 
   return (
     <div className="space-y-8">
@@ -383,7 +380,7 @@ export function CreditsBilling() {
               ) : subscriptions.length > 0 ? (
                 subscriptions.map((plan) => (
                   <tr key={plan.id} className="border-b border-border/40 last:border-0">
-                    <td className="py-4 pr-4 font-medium text-primary">{plan.plan ?? plan.plan_name ?? "Plan"}</td>
+                    <td className="py-4 pr-4 font-medium text-primary">{formatPlan(plan.plan_slug ?? plan.plan, plan.plan_name ?? "Plan")}</td>
                     <td className="py-4 pr-4">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -452,7 +449,7 @@ export function CreditsBilling() {
                 transactions.map((transaction) => (
                   <tr key={transaction.id} className="border-b border-border/40 last:border-0">
                     <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(transaction.created_at)}</td>
-                    <td className="py-4 pr-4 font-medium text-primary">{transaction.plan_name ?? formatPlan(transaction.plan_slug)}</td>
+                    <td className="py-4 pr-4 font-medium text-primary">{formatPlan(transaction.plan_slug, transaction.plan_name)}</td>
                     <td className="py-4 pr-4 text-muted-foreground">{formatCurrency(transaction.amount, transaction.currency)}</td>
                     <td className="py-4 pr-4">
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">

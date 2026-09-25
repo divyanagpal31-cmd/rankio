@@ -60,6 +60,7 @@ import { isScanStateStale } from "../services/scan-staleness";
 import { getVisitorId } from "../services/visitor-id";
 import { TurnstileWidget, isCaptchaEnabled } from "./turnstile-widget";
 import { openTawkChat } from "../services/tawk-service";
+import { getPaymentPlanName } from "../services/payment-plans";
 
 type ReportRow = {
   parameter: string;
@@ -910,7 +911,7 @@ function getVerticalProfile(vertical: VerticalKey): VerticalProfile {
 
 function displayUrl(value?: string | null) {
   const fallback = String(value ?? "").trim();
-  if (!fallback) return "https://example.com";
+  if (!fallback) return "";
   try {
     const url = new URL(fallback);
     return `${url.protocol}//${url.host}${url.pathname === "/" ? "" : url.pathname}`;
@@ -2106,7 +2107,7 @@ export function ReportPage() {
       const fetchReport = async () => {
         let reportQuery = supabase
           .from("reports")
-          .select(user ? "*, websites!inner(user_id)" : "*")
+          .select(user ? "*, websites!inner(user_id, url, normalized_url)" : "*, websites(url, normalized_url)")
           .eq("id", reportId);
 
         if (user) {
@@ -2133,7 +2134,7 @@ export function ReportPage() {
         setReportById(null);
         setReportError(error.message);
       } else {
-        const resolvedReport = data ? (({ websites: _websites, ...report }) => report)(data as any) : (safeLocalReport ? safeLocalReport : null);
+        const resolvedReport = data ? (data as any) : (safeLocalReport ? safeLocalReport : null);
         setReportById(resolvedReport);
         if (resolvedReport) {
           writeReportCache(reportId, resolvedReport);
@@ -2314,7 +2315,7 @@ export function ReportPage() {
 
       const { data: refreshed, error: refreshError } = await supabase
         .from("reports")
-        .select("*, websites!inner(user_id)")
+        .select("*, websites!inner(user_id, url, normalized_url)")
         .eq("id", reportId)
         .eq("websites.user_id", user.id)
         .maybeSingle();
@@ -2322,7 +2323,7 @@ export function ReportPage() {
       if (cancelled) return;
 
       if (!refreshError && refreshed) {
-        const resolvedReport = (({ websites: _websites, ...report }) => report)(refreshed as any);
+        const resolvedReport = refreshed as any;
         setReportById(resolvedReport);
         writeReportCache(reportId, resolvedReport);
         try {
@@ -2346,12 +2347,18 @@ export function ReportPage() {
     };
   }, [activeReport, loadingReport, reportId, unlockAttemptedReportId, unlockFailedReportId, unlockingReport, user]);
 
+  const linkedWebsite = (activeReport as any)?.websites ?? null;
   const display = displayUrl(
-    rawScanData?.lighthouseResult?.finalUrl ?? 
-      rawScanData?.lighthouseResult?.requestedUrl ?? 
-      (activeReport as any)?.site ?? 
+    linkedWebsite?.url ??
+      linkedWebsite?.normalized_url ??
       (activeReport as any)?.website_url ??
-      (activeReport as any)?.url
+      (activeReport as any)?.url ??
+      (activeReport as any)?.site ??
+      rawScanData?.rankio?.url ??
+      rawScanData?.url ??
+      rawScanData?.site ??
+      rawScanData?.lighthouseResult?.finalUrl ??
+      rawScanData?.lighthouseResult?.requestedUrl
   );
   const displayHost = hostFromUrl(display);
   const scanScope = scanScopeFromUrl(display);
@@ -3282,10 +3289,7 @@ export function ReportPage() {
   const projectLabel = String(rawScanData?.rankio?.vertical ?? rawScanData?.industry ?? rawScanData?.vertical ?? verticalProfile.label);
   const reportStatusLabel = isGuest ? "Preview Report" : (activeReport as any)?.report_level === "full" ? "Full Report" : "Report";
   const reportPlanSlug = String((activeReport as any)?.access_tier_required ?? "").trim();
-  const reportPlanLabel =
-    reportStatusLabel === "Full Report"
-      ? `${reportPlanSlug ? reportPlanSlug.charAt(0).toUpperCase() + reportPlanSlug.slice(1) : "Paid"} Plan`
-      : "Preview";
+  const reportPlanLabel = reportStatusLabel === "Full Report" ? getPaymentPlanName(reportPlanSlug, "AI Visibility Report") : "Preview";
   const reportCreditUsedLabel =
     reportStatusLabel === "Full Report"
       ? (activeReport as any)?.is_cached
@@ -3734,7 +3738,7 @@ export function ReportPage() {
                         label: "Plan",
                         value:
                           reportAccessTier && reportAccessTier !== "unknown"
-                            ? `${reportAccessTier.charAt(0).toUpperCase()}${reportAccessTier.slice(1)} Plan`
+                            ? getPaymentPlanName(reportAccessTier, "AI Visibility Report")
                             : reportPlanLabel,
                       },
                       { label: "Credit Used", value: reportCreditUsedLabel },

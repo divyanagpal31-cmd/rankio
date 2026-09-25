@@ -62,3 +62,18 @@ export function isPayPalCheckoutPlan(planId: PaymentPlanId): planId is PayPalChe
   return planId === "starter" || planId === "growth";
 }
 
+
+export function getPaymentPlanName(planId?: string | null, fallback?: string | null): string {
+  const normalized = String(planId ?? "").trim().toLowerCase();
+  const fallbackValue = String(fallback ?? "").trim();
+  const fallbackSlug = fallbackValue.toLowerCase().replace(/\s+plan$/, "");
+  const fallbackPlan = paymentPlans.find((item) => item.id === fallbackSlug || item.name.toLowerCase() === fallbackValue.toLowerCase());
+
+  if (normalized === "free") return fallbackPlan?.name ?? (fallbackSlug && fallbackSlug !== "free" ? fallbackValue : "No package");
+
+  const plan = paymentPlans.find((item) => item.id === normalized);
+  if (plan) return plan.name;
+
+  if (!fallbackValue) return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : "-";
+  return fallbackPlan?.name ?? fallbackValue;
+}

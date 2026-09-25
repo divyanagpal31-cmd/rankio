@@ -11,8 +11,8 @@ type PayPalPlan = {
 };
 
 const plans: Record<PayPalPlanId, PayPalPlan> = {
-  starter: { id: "starter", name: "Starter", amount: "9.99", reportQuota: 1 },
-  growth: { id: "growth", name: "Growth", amount: "34.99", reportQuota: 5 },
+  starter: { id: "starter", name: "AI Visibility Report", amount: "9.99", reportQuota: 1 },
+  growth: { id: "growth", name: "Team Pack", amount: "34.99", reportQuota: 5 },
 };
 
 const corsHeaders = {

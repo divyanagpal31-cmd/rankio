@@ -24,6 +24,7 @@ import {
 import { useLocation, useNavigate } from "react-router";
 import { buildReportComparison, type ReportComparisonInput } from "../../services/report-comparison-service";
 import { formatReadableDate } from "../../services/date-format";
+import { getPaymentPlanName } from "../../services/payment-plans";
 
 function normalizeStatus(value?: string | null) {
   return (value ?? "").toLowerCase().trim().replace(/[\s_]+/g, "-");
@@ -42,11 +43,6 @@ function isFreshReport(value?: string | null) {
   return Number.isFinite(generatedAtMs) && Date.now() - generatedAtMs < REPORT_CACHE_MS;
 }
 
-function formatPlanLabel(value?: string | null) {
-  const plan = String(value ?? "").trim();
-  if (!plan) return "Preview";
-  return plan.charAt(0).toUpperCase() + plan.slice(1);
-}
 
 function reportPlanBadge(website: any) {
   const reportLevel = String(website?.latest_report_level ?? "").trim().toLowerCase();
@@ -56,7 +52,7 @@ function reportPlanBadge(website: any) {
 
   return (
     <Badge className="border border-accent/20 bg-accent/10 text-accent hover:bg-accent/10">
-      {formatPlanLabel(website?.latest_access_tier_required)} Plan
+      {getPaymentPlanName(website?.latest_access_tier_required, "AI Visibility Report")}
     </Badge>
   );
 }
@@ -1299,5 +1295,6 @@ export function MyWebsites() {
     </div>
   );
 }
+
 
 

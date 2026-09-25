@@ -202,6 +202,23 @@ function normalizeUrl(raw: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
+
+function withReportUrlMetadata(rawScanData: unknown, normalizedUrl: string) {
+  if (!rawScanData || typeof rawScanData !== "object") return rawScanData;
+
+  const source = rawScanData as Record<string, unknown>;
+  const rankio = source.rankio && typeof source.rankio === "object" ? (source.rankio as Record<string, unknown>) : null;
+  const lighthouseResult =
+    source.lighthouseResult && typeof source.lighthouseResult === "object" ? (source.lighthouseResult as Record<string, unknown>) : null;
+
+  return {
+    ...source,
+    url: normalizedUrl,
+    site: normalizedUrl,
+    ...(rankio ? { rankio: { ...rankio, url: normalizedUrl, site: normalizedUrl } } : {}),
+    ...(lighthouseResult ? { lighthouseResult: { ...lighthouseResult, requestedUrl: normalizedUrl, finalUrl: normalizedUrl } } : {}),
+  };
+}
 function stripMarkdownLinks(value: string): string {
   return value
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
@@ -2697,10 +2714,11 @@ serve(async (req) => {
 
     const sourceReportId = String((cached as any).id);
     const cachedPayload = cached as any;
-    const { websites: _w, id: _id, website_id: _wid, generated_at: _ga, ...rest } = cachedPayload;
+    const { websites: _w, id: _id, website_id: _wid, generated_at: _ga, raw_scan_data: cachedRawScanData, ...rest } = cachedPayload;
     const insertPayload = {
       id: crypto.randomUUID(),
       ...rest,
+      raw_scan_data: withReportUrlMetadata(cachedRawScanData, normalized),
       website_id: site.id,
       generated_at: nowIso,
       visitor_id: userId ? null : visitorId,

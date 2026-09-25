@@ -1293,6 +1293,23 @@ function toFiniteNumber(value: unknown): number | null {
 
 const REPORT_CACHE_HOURS = 24;
 const REPORT_CACHE_MS = REPORT_CACHE_HOURS * 60 * 60 * 1000;
+const REPORT_LOAD_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
 
 function getReportUnlockStorageKey(userId: string, reportId: string) {
   return `rankio.reportUnlock.${userId}.${reportId}`;
@@ -2079,6 +2096,7 @@ export function ReportPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const currentUserId = user?.id ?? null;
 
     const load = async () => {
       if (!reportId) {
@@ -2088,62 +2106,97 @@ export function ReportPage() {
         return;
       }
 
+      const cachedReport = readReportCache(reportId);
       const localReport =
-        reportFromState && String(reportFromState?.id ?? "") === reportId ? reportFromState : readReportCache(reportId);
-      const safeLocalReport = !user && localReport && String(localReport?.id ?? "") === reportId ? localReport : null;
+        reportFromState && String(reportFromState?.id ?? "") === reportId ? reportFromState : cachedReport;
+      const currentReport = reportById && String((reportById as any)?.id ?? "") === reportId ? reportById : null;
+      const fallbackReport =
+        currentReport ??
+        (localReport && String(localReport?.id ?? "") === reportId ? localReport : null);
+      const safeLocalReport = !currentUserId && fallbackReport ? fallbackReport : null;
 
-      if (safeLocalReport) {
-        setReportById(safeLocalReport);
+      if (fallbackReport) {
+        setReportById(fallbackReport);
         setReportError(null);
-        writeReportCache(reportId, safeLocalReport);
-        setLoadingReport(false);
+        writeReportCache(reportId, fallbackReport);
       } else {
         setReportById(undefined);
-        setLoadingReport(true);
       }
+      setLoadingReport(!fallbackReport);
 
       setReportError(null);
 
       const fetchReport = async () => {
         let reportQuery = supabase
           .from("reports")
-          .select(user ? "*, websites!inner(user_id, url, normalized_url)" : "*, websites(url, normalized_url)")
+          .select(currentUserId ? "*, websites!inner(user_id, url, normalized_url)" : "*, websites(url, normalized_url)")
           .eq("id", reportId);
 
-        if (user) {
-          reportQuery = reportQuery.eq("websites.user_id", user.id);
+        if (currentUserId) {
+          reportQuery = reportQuery.eq("websites.user_id", currentUserId);
         }
 
         return reportQuery.maybeSingle();
       };
 
-      let { data, error } = await fetchReport();
+      try {
+        let { data, error } = await withTimeout(
+          fetchReport(),
+          REPORT_LOAD_TIMEOUT_MS,
+          "Report loading timed out. Please refresh and try again."
+        );
 
-      if (!error && !data && user && session?.access_token) {
-        const claimed = await claimVisitorReportForUser(reportId, session.access_token);
-        if (claimed) {
-          const retry = await fetchReport();
-          data = retry.data;
-          error = retry.error;
+        if (!error && !data && currentUserId && session?.access_token) {
+          const claimed = await withTimeout(
+            claimVisitorReportForUser(reportId, session.access_token),
+            REPORT_LOAD_TIMEOUT_MS,
+            "Report ownership check timed out. Please refresh and try again."
+          );
+          if (claimed) {
+            const retry = await withTimeout(
+              fetchReport(),
+              REPORT_LOAD_TIMEOUT_MS,
+              "Report loading timed out. Please refresh and try again."
+            );
+            data = retry.data;
+            error = retry.error;
+          }
         }
-      }
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (error) {
-        setReportById(null);
-        setReportError(error.message);
-      } else {
-        const resolvedReport = data ? (data as any) : (safeLocalReport ? safeLocalReport : null);
+        if (error) {
+          if (fallbackReport) {
+            console.warn("Report refresh failed; keeping cached report", error);
+            setReportById(fallbackReport);
+            setReportError(null);
+            return;
+          }
+          setReportById(null);
+          setReportError(error.message);
+          return;
+        }
+
+        const resolvedReport = data ? (data as any) : fallbackReport;
         setReportById(resolvedReport);
         if (resolvedReport) {
           writeReportCache(reportId, resolvedReport);
-        } else if (user) {
+        } else if (currentUserId) {
           setReportError("This report belongs to another account or is no longer available.");
         }
+      } catch (error) {
+        if (cancelled) return;
+        if (fallbackReport) {
+          console.warn("Report refresh failed; keeping cached report", error);
+          setReportById(fallbackReport);
+          setReportError(null);
+        } else {
+          setReportById(null);
+          setReportError(error instanceof Error ? error.message : "Failed to load report. Please refresh and try again.");
+        }
+      } finally {
+        if (!cancelled) setLoadingReport(false);
       }
-
-      setLoadingReport(false);
     };
 
     load();
@@ -2151,7 +2204,7 @@ export function ReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [reportId, reportFromState, session?.access_token, user]);
+  }, [reportId, reportFromState, session?.access_token, user?.id]);
 
   useEffect(() => {
     const sectionIds = ["executive-summary", "ai-audit", "implementation-plan", "roadmap"];

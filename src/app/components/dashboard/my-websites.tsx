@@ -865,7 +865,7 @@ export function MyWebsites() {
               Add a Website
             </DialogTitle>
             <DialogDescription id="add-website-description">
-              Add a website URL to run a scan and keep it in your history.
+              Enter a website URL to start your AI Visibility analysis.
             </DialogDescription>
           </DialogHeader>
 
@@ -873,7 +873,7 @@ export function MyWebsites() {
             <Label htmlFor="websiteUrl">Website URL</Label>
             <Input
               id="websiteUrl"
-              placeholder="Enter your website URL"
+              placeholder="https://example.com"
               value={newWebsiteUrl}
               onChange={(e) => {
                 setNewWebsiteUrl(e.target.value);
@@ -906,7 +906,7 @@ export function MyWebsites() {
               onClick={handleAddWebsite}
               disabled={adding || !newWebsiteUrl.trim()}
             >
-              {adding ? "Adding..." : "Add & Scan"}
+              {adding ? "Starting..." : "Start Analysis"}
             </Button>
           </DialogFooter>
         </DialogContent>

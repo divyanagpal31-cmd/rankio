@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Globe, TrendingUp, FileText, CreditCard, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -54,6 +54,21 @@ export function Overview() {
     setActionError(null);
     setAddOpen(true);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("startScan") !== "1" || !user) return;
+
+    openAddWebsite();
+    params.delete("startScan");
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : "",
+      },
+      { replace: true }
+    );
+  }, [location.pathname, location.search, navigate, user]);
 
   const handleAddWebsite = async () => {
     if (!user) return;
@@ -322,7 +337,7 @@ export function Overview() {
               Add a Website
             </DialogTitle>
             <DialogDescription id="dashboard-add-website-description">
-              Add a website URL to run a scan and keep it in your history.
+              Enter a website URL to start your AI Visibility analysis.
             </DialogDescription>
           </DialogHeader>
 
@@ -330,7 +345,7 @@ export function Overview() {
             <Label htmlFor="dashboardWebsiteUrl">Website URL</Label>
             <Input
               id="dashboardWebsiteUrl"
-              placeholder="Enter your website URL"
+              placeholder="https://example.com"
               value={newWebsiteUrl}
               onChange={(event) => {
                 setNewWebsiteUrl(event.target.value);
@@ -363,7 +378,7 @@ export function Overview() {
               onClick={handleAddWebsite}
               disabled={adding || !newWebsiteUrl.trim()}
             >
-              {adding ? "Adding..." : "Add & Scan"}
+              {adding ? "Starting..." : "Start Analysis"}
             </Button>
           </DialogFooter>
         </DialogContent>

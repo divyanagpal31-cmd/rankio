@@ -212,8 +212,8 @@ serve(async (req) => {
   if (!phone) return jsonResponse({ error: "PHONE_REQUIRED", message: "Phone number is required" }, 400);
   if (!isValidPhone(phone)) return jsonResponse({ error: "INVALID_PHONE", message: "Enter a valid phone number" }, 400);
   if (company.length > 200) return jsonResponse({ error: "COMPANY_TOO_LONG", message: "Company must be 200 characters or less" }, 400);
-  if (!requirements) return jsonResponse({ error: "REQUIREMENTS_REQUIRED", message: "Requirements are required" }, 400);
-  if (requirements.length < 20) return jsonResponse({ error: "REQUIREMENTS_TOO_SHORT", message: "Requirements must be at least 20 characters" }, 400);
+  if (!requirements) return jsonResponse({ error: "REQUIREMENTS_REQUIRED", message: "Please select what you need help with" }, 400);
+  if (requirements.length > 2500) return jsonResponse({ error: "REQUIREMENTS_TOO_LONG", message: "Request details must be 2500 characters or less" }, 400);
 
   if (turnstileSecret) {
     if (!captchaToken) return jsonResponse({ error: "CAPTCHA_REQUIRED", message: "Please complete the CAPTCHA verification" }, 400);
@@ -323,7 +323,7 @@ serve(async (req) => {
     `Scan Scope: ${scanScope || "-"}`,
     `Source URL: ${sourceUrl || "-"}`,
     "",
-    "Requirements:",
+    "How can we help?:",
     requirements,
   ].join("\n");
 
@@ -358,7 +358,7 @@ serve(async (req) => {
 <tr><td style="background:#ffffff;padding:28px 32px;border-left:1px solid #d9e2f1;border-right:1px solid #d9e2f1;border-bottom:1px solid #d9e2f1;border-radius:0 0 20px 20px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">${detailRows}</table>
 <div style="margin-top:18px;background:#f8faff;border:1px solid #dbe3f1;border-radius:16px;padding:18px 20px;">
-<div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#64748b;font-weight:700;">Requirements</div>
+<div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#64748b;font-weight:700;">How can we help?</div>
 <div style="margin-top:10px;font-size:15px;line-height:1.8;color:#334155;">${escapeHtml(requirements).replace(/\n/g, "<br/>")}</div>
 </div>
 <div style="padding-top:18px;font-size:12px;line-height:1.6;color:#64748b;">Submitted: ${escapeHtml(createdAt)}</div>

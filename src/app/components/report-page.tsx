@@ -117,6 +117,7 @@ type CallbackForm = {
   phone: string;
   company: string;
   requirements: string;
+  details: string;
 };
 
 type CallbackFormErrors = Partial<Record<keyof CallbackForm, string>>;
@@ -140,7 +141,18 @@ const emptyCallbackForm: CallbackForm = {
   phone: "",
   company: "",
   requirements: "",
+  details: "",
 };
+const callbackHelpOptions = [
+  "Understanding my AI Visibility Report",
+  "Fixing technical issues",
+  "Improving website content",
+  "Improving AI Visibility",
+  "Implementing recommendations",
+  "Agency / Multiple Websites",
+  "Other",
+];
+
 
 const countryDialCodes: Record<string, string> = {
   AC: "+247",
@@ -433,7 +445,9 @@ function getCountryOptions() {
     return {
       code,
       name,
+      dialCode: displayCode,
       label: `${name} (${displayCode})`,
+      phoneLabel: `${displayCode} ${name}`,
     };
   };
 
@@ -693,6 +707,7 @@ function validateCallbackForm(form: CallbackForm): CallbackFormErrors {
   const phone = form.phone.trim();
   const company = form.company.trim();
   const requirements = form.requirements.trim();
+  const details = form.details.trim();
 
   if (!fullName) errors.fullName = "Name is required.";
   else if (fullName.length < 2) errors.fullName = "Name must be at least 2 characters.";
@@ -709,8 +724,8 @@ function validateCallbackForm(form: CallbackForm): CallbackFormErrors {
 
   if (company.length > 200) errors.company = "Company must be 200 characters or less.";
 
-  if (!requirements) errors.requirements = "Requirements are required.";
-  else if (requirements.length < 20) errors.requirements = "Please add at least 20 characters.";
+  if (!requirements) errors.requirements = "Please select what you need help with.";
+  if (details.length > 2000) errors.details = "Tell us more must be 2000 characters or less.";
 
   return errors;
 }
@@ -1294,6 +1309,7 @@ function toFiniteNumber(value: unknown): number | null {
 const REPORT_CACHE_HOURS = 24;
 const REPORT_CACHE_MS = REPORT_CACHE_HOURS * 60 * 60 * 1000;
 const REPORT_LOAD_TIMEOUT_MS = 15000;
+const REPORT_INTEGRATIONS_VISIBLE = false;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -2423,7 +2439,7 @@ export function ReportPage() {
     let cancelled = false;
 
     const loadVerifiedSignals = async () => {
-      if (!user || !display) {
+      if (!REPORT_INTEGRATIONS_VISIBLE || !user || !display) {
         setSearchConsoleSnapshot(null);
         setSearchConsoleLoading(false);
         setGa4Snapshot(null);
@@ -3317,10 +3333,10 @@ export function ReportPage() {
   }
 
 
-  const searchConsoleSummary = searchConsoleSnapshot
+  const searchConsoleSummary = REPORT_INTEGRATIONS_VISIBLE && searchConsoleSnapshot
     ? ` Search Console adds ${searchConsoleSnapshot.totalImpressions.toLocaleString()} impressions and ${searchConsoleSnapshot.queryCount} tracked queries over the last 28 days.`
     : "";
-  const ga4Summary = ga4Snapshot
+  const ga4Summary = REPORT_INTEGRATIONS_VISIBLE && ga4Snapshot
     ? ` GA4 adds ${ga4Snapshot.totalActiveUsers.toLocaleString()} active users and ${ga4Snapshot.totalSessions.toLocaleString()} sessions over the last 28 days.`
     : "";
 
@@ -3428,13 +3444,20 @@ export function ReportPage() {
 
     setCallbackCaptchaError(null);
     setCallbackSubmitting(true);
+    const callbackDetails = callbackForm.details.trim();
+    const callbackRequirements = callbackDetails
+      ? `${callbackForm.requirements.trim()}
+
+Tell us more:
+${callbackDetails}`
+      : callbackForm.requirements.trim();
     const result = await submitCallbackRequest({
       fullName: callbackForm.fullName,
       email: callbackForm.email,
       country: callbackForm.country,
       phone: callbackForm.phone,
       company: callbackForm.company,
-      requirements: callbackForm.requirements,
+      requirements: callbackRequirements,
       websiteUrl: display,
       reportId: String(activeReport?.id ?? reportId ?? ""),
       scanScope: scanScope.label,
@@ -3451,7 +3474,9 @@ export function ReportPage() {
     }
 
     setCallbackSubmitted(true);
-    setCallbackNotice("Thanks, we received your request. Our team will contact you shortly.");
+    setCallbackNotice(`Request received ✓
+Thanks! Your callback request has been submitted successfully. Our team will contact you shortly.
+Website: ${displayHost}`);
     setCallbackCaptchaToken("");
     setCallbackCaptchaError(null);
     setCallbackCaptchaKey((current) => current + 1);
@@ -3698,7 +3723,7 @@ export function ReportPage() {
               </div>
             </div>
           </section>
-          <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)]">
+          <div className="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
             <aside className="report-sidebar hidden lg:block">
               <div className="sticky top-[7.5rem] rounded-[24px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">
                 <p className="text-[24px] font-semibold tracking-tight text-white">Rankio Intelligence</p>
@@ -3706,9 +3731,9 @@ export function ReportPage() {
                 <nav className="mt-8 space-y-2">
                   {[
                     { id: "executive-summary", label: "Executive Summary", icon: BarChart3 },
-                    { id: "ai-audit", label: isGuest ? "AI Visibility Audit" : "AI Audit", icon: Bot },
-                    { id: "implementation-plan", label: isGuest ? "Findings & Recommendations" : "Evidence & Fixes", icon: ShieldCheck },
-                    { id: "roadmap", label: isGuest ? "Improvement Roadmap" : "Roadmap", icon: Rocket },
+                    { id: "ai-audit", label: isGuest ? "AI Visibility Audit" : "AI Visibility Audit", icon: Bot },
+                    { id: "implementation-plan", label: isGuest ? "Findings & Recommendations" : "Findings & Recommendations", icon: ShieldCheck },
+                    { id: "roadmap", label: isGuest ? "Improvement Roadmap" : "Improvement Roadmap", icon: Rocket },
                   ].map((item) => {
                     const isLockedGuestTab = isGuest && item.id !== "executive-summary";
 
@@ -3722,7 +3747,7 @@ export function ReportPage() {
                           setActiveSection(item.id);
                           scrollToReportSection(item.id);
                         }}
-                        className={`flex w-full items-center gap-3 rounded-[12px] border px-4 py-3 text-sm transition-all ${
+                        className={`flex w-full items-center justify-start gap-3 rounded-[12px] border px-4 py-3 text-left text-sm transition-all ${
                           activeSection === item.id
                             ? "border-white/15 bg-accent text-white shadow-[0_10px_24px_hsl(var(--accent)/0.25)]"
                             : isLockedGuestTab
@@ -3730,8 +3755,8 @@ export function ReportPage() {
                               : "border-white/8 bg-white/0 text-white/70 hover:bg-white/6 hover:text-white"
                         }`}
                       >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.label}</span>
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1 leading-5">{item.label}</span>
                       </button>
                     );
 
@@ -4035,7 +4060,7 @@ export function ReportPage() {
                   })}
                 </div>
 
-                {!isGuest ? (
+                {!isGuest && REPORT_INTEGRATIONS_VISIBLE ? (
                   <div className="mt-6 rounded-[18px] border border-white/10 bg-white/5 p-5">
                     <div className="flex items-center justify-between gap-4">
                       <div>
@@ -4074,7 +4099,7 @@ export function ReportPage() {
                   </div>
                 ) : null}
 
-                {!isGuest ? (
+                {!isGuest && REPORT_INTEGRATIONS_VISIBLE ? (
                   <div className="mt-6 rounded-[18px] border border-white/10 bg-white/5 p-5">
                     <div className="flex items-center justify-between gap-4">
                       <div>
@@ -4534,31 +4559,30 @@ export function ReportPage() {
       <Dialog open={callbackOpen} onOpenChange={setCallbackOpen}>
         <DialogContent
           onOpenAutoFocus={(event) => event.preventDefault()}
-          className="max-h-[90vh] overflow-y-auto border-slate-200 bg-white p-0 text-slate-950 shadow-[0_30px_100px_rgba(15,23,42,0.28)] sm:max-w-2xl"
+          className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden border-slate-200 bg-white p-0 text-slate-950 shadow-[0_30px_100px_rgba(15,23,42,0.28)] sm:max-w-2xl"
         >
-          <div className="relative overflow-hidden rounded-lg">
-            <div className="absolute inset-x-0 top-0 h-32 bg-[linear-gradient(135deg,rgba(111,116,239,0.12),rgba(255,255,255,0))]" />
-            <div className="relative">
-              <div className="border-b border-slate-100 px-6 py-6 sm:px-8">
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg">
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <div className="shrink-0 border-b border-slate-100 bg-[linear-gradient(135deg,rgba(111,116,239,0.12),rgba(255,255,255,0))] px-5 py-4 sm:px-6">
                 <DialogHeader>
-                  <DialogTitle className="text-2xl font-semibold tracking-tight text-slate-950">
-                    Request a call back
+                  <DialogTitle className="text-xl font-semibold tracking-tight text-slate-950">
+                    Request a Call Back
                   </DialogTitle>
-                  <DialogDescription className="pt-2 text-sm leading-7 text-slate-600">
-                    Share your contact details and what you need help with. We'll connect this request to the current report.
+                  <DialogDescription className="pt-2 text-sm leading-6 text-slate-600">
+                    Need help understanding or acting on your AI Visibility Report? Share a few details and our team will get in touch to discuss your requirements.
                   </DialogDescription>
                 </DialogHeader>
               </div>
 
-              <div className="grid gap-4 px-6 py-6 sm:grid-cols-2 sm:px-8">
-                <div className="space-y-2">
+              <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto px-5 py-4 sm:grid-cols-2 sm:px-6">
+                <div className="space-y-1.5">
                   <Label htmlFor="callback-name" className="text-sm font-semibold text-slate-700">Name*</Label>
                   <Input
                     id="callback-name"
                     value={callbackForm.fullName}
                     readOnly={callbackNameReadonly}
                     onChange={(event) => updateCallbackField("fullName", event.target.value)}
-                    className={`h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30 ${
+                    className={`h-10 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30 ${
                       callbackNameReadonly ? "cursor-not-allowed bg-slate-50 text-slate-700" : ""
                     }`}
                     aria-invalid={Boolean(callbackErrors.fullName)}
@@ -4566,7 +4590,7 @@ export function ReportPage() {
                   {callbackErrors.fullName ? <p className="text-xs text-rose-600">{callbackErrors.fullName}</p> : null}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="callback-email" className="text-sm font-semibold text-slate-700">Email*</Label>
                   <Input
                     id="callback-email"
@@ -4574,7 +4598,7 @@ export function ReportPage() {
                     value={callbackForm.email}
                     readOnly={callbackEmailReadonly}
                     onChange={(event) => updateCallbackField("email", event.target.value)}
-                    className={`h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30 ${
+                    className={`h-10 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30 ${
                       callbackEmailReadonly ? "cursor-not-allowed bg-slate-50 text-slate-700" : ""
                     }`}
                     aria-invalid={Boolean(callbackErrors.email)}
@@ -4582,66 +4606,83 @@ export function ReportPage() {
                   {callbackErrors.email ? <p className="text-xs text-rose-600">{callbackErrors.email}</p> : null}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="callback-country" className="text-sm font-semibold text-slate-700">Country*</Label>
-                  <select
-                    id="callback-country"
-                    value={callbackForm.country}
-                    onChange={(event) => updateCallbackField("country", event.target.value)}
-                    className="flex h-11 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-invalid={Boolean(callbackErrors.country)}
-                  >
-                    <option value="">Select country</option>
-                    {countryOptions.map((country) => (
-                      <option key={country.code} value={country.label}>
-                        {country.label}
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="callback-phone" className="text-sm font-semibold text-slate-700">Phone Number*</Label>
+                  <div className="flex overflow-hidden rounded-md border border-slate-200 bg-white shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-accent/30">
+                    <select
+                      id="callback-country"
+                      value={callbackForm.country}
+                      onChange={(event) => updateCallbackField("country", event.target.value)}
+                      className="h-10 w-[150px] shrink-0 border-0 border-r border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-950 outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:w-[180px]"
+                      aria-label="Country code"
+                      aria-invalid={Boolean(callbackErrors.country)}
+                    >
+                      <option value="">Code</option>
+                      {countryOptions.map((country) => (
+                        <option key={country.code} value={country.label}>
+                          {country.phoneLabel}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      id="callback-phone"
+                      value={callbackForm.phone}
+                      onChange={(event) => updateCallbackField("phone", event.target.value.replace(/[^0-9\s().-]/g, ""))}
+                      placeholder="98765 43210"
+                      inputMode="tel"
+                      className="h-10 min-w-0 flex-1 border-0 bg-white text-slate-950 shadow-none focus-visible:ring-0"
+                      aria-invalid={Boolean(callbackErrors.phone)}
+                    />
+                  </div>
                   {callbackErrors.country ? <p className="text-xs text-rose-600">{callbackErrors.country}</p> : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="callback-phone" className="text-sm font-semibold text-slate-700">Phone number*</Label>
-                  <Input
-                    id="callback-phone"
-                    value={callbackForm.phone}
-                    onChange={(event) => updateCallbackField("phone", event.target.value)}
-                    placeholder="98765 43210"
-                    className="h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
-                    aria-invalid={Boolean(callbackErrors.phone)}
-                  />
                   {callbackErrors.phone ? <p className="text-xs text-rose-600">{callbackErrors.phone}</p> : null}
                 </div>
 
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="callback-company" className="text-sm font-semibold text-slate-700">Company <span className="font-normal text-slate-400">(optional)</span></Label>
                   <Input
                     id="callback-company"
                     value={callbackForm.company}
                     onChange={(event) => updateCallbackField("company", event.target.value)}
                     placeholder="Company name"
-                    className="h-11 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
+                    className="h-10 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
                     aria-invalid={Boolean(callbackErrors.company)}
                   />
                   {callbackErrors.company ? <p className="text-xs text-rose-600">{callbackErrors.company}</p> : null}
                 </div>
 
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="callback-requirements" className="text-sm font-semibold text-slate-700">Requirements*</Label>
-                  <Textarea
+                <div className="space-y-1.5">
+                  <Label htmlFor="callback-requirements" className="text-sm font-semibold text-slate-700">How can we help?*</Label>
+                  <select
                     id="callback-requirements"
                     value={callbackForm.requirements}
                     onChange={(event) => updateCallbackField("requirements", event.target.value)}
-                    placeholder="Tell us what you want help implementing from this report."
-                    className="min-h-28 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
+                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-50"
                     aria-invalid={Boolean(callbackErrors.requirements)}
-                  />
+                  >
+                    <option value="">Select what you need help with</option>
+                    {callbackHelpOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                   {callbackErrors.requirements ? <p className="text-xs text-rose-600">{callbackErrors.requirements}</p> : null}
                 </div>
 
-                <div className="rounded-2xl border border-slate-300 bg-slate-100 p-4 text-xs leading-6 text-slate-700 sm:col-span-2">
-                  Report context included: {displayHost} · {scanScope.label}
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="callback-details" className="text-sm font-semibold text-slate-700">Tell us more <span className="font-normal text-slate-400">(optional)</span></Label>
+                  <Textarea
+                    id="callback-details"
+                    value={callbackForm.details}
+                    onChange={(event) => updateCallbackField("details", event.target.value)}
+                    placeholder="Briefly describe what you'd like help with..."
+                    className="min-h-16 border-slate-200 bg-white text-slate-950 focus-visible:ring-accent/30"
+                    aria-invalid={Boolean(callbackErrors.details)}
+                  />
+                  {callbackErrors.details ? <p className="text-xs text-rose-600">{callbackErrors.details}</p> : null}
+                </div>
+
+                <div className="rounded-xl border border-slate-300 bg-slate-100 p-2.5 text-xs leading-5 text-slate-700">
+                  By submitting this form, you agree that Rankio may contact you regarding your request.
                 </div>
 
                 <TurnstileWidget
@@ -4652,21 +4693,21 @@ export function ReportPage() {
                     if (token) setCallbackCaptchaError(null);
                   }}
                   error={callbackCaptchaError}
-                  className="sm:col-span-2"
+                  className="justify-self-start"
                 />
               </div>
 
               {callbackNotice ? (
-                <div className={`mx-6 rounded-2xl border px-4 py-3 text-sm leading-6 sm:mx-8 ${
-                  callbackNotice.startsWith("Thanks") || callbackNotice.startsWith("Your request was saved")
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                <div className={`mx-5 rounded-xl border px-4 py-2.5 text-sm leading-6 sm:mx-6 ${
+                  callbackNotice.startsWith("Request received") || callbackNotice.startsWith("Thanks") || callbackNotice.startsWith("Your request was saved")
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 whitespace-pre-line"
                     : "border-rose-200 bg-rose-50 text-rose-700"
                 }`}>
                   {callbackNotice}
                 </div>
               ) : null}
 
-              <DialogFooter className="mt-6 gap-3 border-t border-slate-100 bg-slate-50 px-6 py-5 sm:px-8">
+              <DialogFooter className="shrink-0 gap-3 border-t border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
                 <Button variant="outline" onClick={() => setCallbackOpen(false)} disabled={callbackSubmitting}>
                   Close
                 </Button>

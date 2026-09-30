@@ -33,9 +33,9 @@ function toFriendlyScanError(message: string, code?: string) {
   const normalizedCode = String(code ?? "").trim().toUpperCase();
   switch (normalizedCode) {
     case "DOMAIN_NOT_REACHABLE":
-      return "This domain is not reachable yet. Please check the DNS or hosting setup and try again after the website is live.";
+      return "We couldn't reach this website. Rankio couldn't access the domain at this time. Please check that the website URL is correct and publicly accessible, then try again.";
     case "WEBSITE_NOT_LIVE":
-      return "We reached the domain, but no active website content is available to scan. Please publish the website and try again.";
+      return "We couldn't reach this website. Rankio couldn't access the domain at this time. Please check that the website URL is correct and publicly accessible, then try again.";
     case "WEBSITE_BLOCKED":
       return "This website is blocking access to the scan. Please allow public access or update the site security settings, then try again.";
     case "WEBSITE_TIMEOUT":
@@ -45,7 +45,7 @@ function toFriendlyScanError(message: string, code?: string) {
     case "WEBSITE_NOT_SCANNABLE":
       return "This URL does not look like a readable website page. Please enter the main website URL and try again.";
     case "WEBSITE_NOT_REACHABLE":
-      return "We could not reach this website. Please check that the site is online and accessible in a browser, then try again.";
+      return "We couldn't reach this website. Rankio couldn't access the domain at this time. Please check that the website URL is correct and publicly accessible, then try again.";
   }
 
   const normalized = originalMessage.toLowerCase();
@@ -56,7 +56,7 @@ function toFriendlyScanError(message: string, code?: string) {
     normalized.includes("dns") ||
     normalized.includes("enotfound")
   ) {
-    return "We could not reach that website. Please check the URL and try again.";
+    return "We couldn't reach this website. Rankio couldn't access the domain at this time. Please check that the website URL is correct and publicly accessible, then try again.";
   }
 
   if (
@@ -94,7 +94,7 @@ function toFriendlyScanError(message: string, code?: string) {
     return originalMessage;
   }
 
-  return "We could not scan that website right now. Please try again.";
+  return "We couldn't scan that website right now. Please try again.";
 }
 
 /**

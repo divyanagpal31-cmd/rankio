@@ -157,18 +157,21 @@ export function PayPalSuccess() {
           </div>
         ) : (
           <div className="space-y-5">
-            <p className="text-muted-foreground">
-              You’re all set. Your payment went through and your plan is active.
-            </p>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-semibold text-primary">Payment successful. Your report credit is ready.</h2>
+              <p className="text-muted-foreground">
+                Your payment has been confirmed. You can now start your AI Visibility analysis.
+              </p>
+            </div>
 
             <div className="rounded-2xl bg-slate-50 p-5">
-              <div className="text-sm text-muted-foreground">Activated plan</div>
-              <div className="mt-1 text-2xl font-semibold text-primary">{plan?.name ?? "Your plan"}</div>
-              {typeof purchasedPackage?.report_quota === "number" && (
-                <div className="mt-2 text-sm text-muted-foreground">
-                  Report credits: {String(purchasedPackage.report_quota)} total
-                </div>
-              )}
+              <div className="text-sm text-muted-foreground">AI Visibility Report</div>
+              <div className="mt-1 text-2xl font-semibold text-primary">
+                {typeof purchasedPackage?.report_quota === "number" ? `${String(purchasedPackage.report_quota)} Report Credit${Number(purchasedPackage.report_quota) === 1 ? "" : "s"}` : "Report credit ready"}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                Your credit is ready to use for one complete AI Visibility Report.
+              </div>
               {typeof purchasedPackage?.payment_order_id === "string" && (
                 <div className="mt-2 text-xs text-muted-foreground">Order ID: {String(purchasedPackage.payment_order_id)}</div>
               )}
@@ -176,8 +179,8 @@ export function PayPalSuccess() {
 
             <div className="flex flex-wrap gap-3">
               <Button asChild>
-                <Link to="/dashboard/reports?startScan=1">
-                  {reportId ? "Start another scan" : "Start scan"}
+                <Link to="/dashboard?startScan=1">
+                  Start Your Analysis
                 </Link>
               </Button>
               {reportId ? (
@@ -186,7 +189,7 @@ export function PayPalSuccess() {
                 </Button>
               ) : null}
               <Button variant="outline" asChild>
-                <Link to="/dashboard">Go to dashboard</Link>
+                <Link to="/dashboard?startScan=1">Go to Dashboard</Link>
               </Button>
               <Button variant="outline" asChild>
                 <Link to="/dashboard/credits">View plans</Link>

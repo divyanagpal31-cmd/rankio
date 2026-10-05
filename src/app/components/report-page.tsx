@@ -1,3 +1,6 @@
+import { auditTone, highestAuditSeverity } from "../services/audit-tile-tone";
+import { calculateDetailsScore, businessDetailsMatch } from "../../../supabase/functions/_shared/structured-scoring";
+import { calculateContentScore, correctReportContentScore, hasContentText } from "../../../supabase/functions/_shared/content-scoring";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
@@ -94,7 +97,7 @@ type AuditSection = {
   eyebrow: string;
   title: string;
   description: string;
-  score: number;
+  score: number | null;
   scoreLabel: string;
   tiles: AuditTile[];
   footer?: string;
@@ -594,24 +597,24 @@ function sitemapStatusDisplay(count: number) {
   };
 }
 
-function contentDepthDisplay(totalWordCount: number) {
-  if (totalWordCount >= 4000) {
+function contentDepthDisplay(depthCoverage: number) {
+  if (depthCoverage >= 0.8) {
     return {
       value: "Strong",
-      detail: "The reviewed content gives AI enough context to understand the site's main topics.",
+      detail: "Most reviewed pages meet the content length benchmark. Word count indicates depth, but does not verify relevance or accuracy.",
     };
   }
 
-  if (totalWordCount >= 1200) {
+  if (depthCoverage >= 0.4) {
     return {
       value: "Moderate",
-      detail: "The reviewed content gives AI some useful context, but important topics may need more detail.",
+      detail: "Reviewed pages partly meet the content length benchmark. Add useful details and examples where needed.",
     };
   }
 
   return {
     value: "Needs more detail",
-    detail: "The reviewed content may be too thin for AI tools to understand the site's main topics clearly.",
+    detail: "Reviewed pages fall below the content length benchmark. Add useful context where needed; length alone does not establish quality.",
   };
 }
 
@@ -629,6 +632,9 @@ function structuredDetailDisplay(schemaTypes: string[]) {
   if (includesType([/breadcrumb/])) details.push("page navigation");
 
   const uniqueDetails = Array.from(new Set(details));
+  if (uniqueDetails.length === 0 && normalizedTypes.length > 0) {
+    return { value: "Other types found", detail: `Detected types: ${schemaTypes.join(", ")}. Review whether these describe the business, website, or page content appropriately.` };
+  }
   if (uniqueDetails.length === 0) {
     return {
       value: "Not found",
@@ -1848,8 +1854,9 @@ function buildReportPdfBlob({
 
   pdf.addHeading("Detailed AI Audit", 2);
   auditSections.forEach((section) => {
-    pdf.addHeading(`${section.title} - ${section.score}/100`, 3);
+    pdf.addHeading(`${section.title} - ${section.score === null ? "Not checked" : `${section.score}/100`}`, 3);
     pdf.addText(section.description, { fontSize: 10 });
+    if (section.footer) pdf.addText(section.footer, { fontSize: 10 });
     section.tiles.forEach((tile) => {
       pdf.addBullet(`${tile.label}: ${tile.value}. ${tile.detail}`);
     });
@@ -1917,7 +1924,7 @@ function SectionCard({
                 strokeWidth="7"
                 fill="none"
                 strokeLinecap="round"
-                strokeDasharray={circleStroke(section.score)}
+                strokeDasharray={circleStroke(section.score ?? 0)}
               />
               <defs>
                 <linearGradient id="audit-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -1927,7 +1934,7 @@ function SectionCard({
               </defs>
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-[20px] font-semibold text-white">{section.score}</span>
+              <span className="text-[20px] font-semibold text-white">{section.score ?? "—"}</span>
             </div>
           </div>
           <div>
@@ -2311,12 +2318,12 @@ export function ReportPage() {
   }, [loadingReport, reportId, reportById, user]);
 
   const activeReport = useMemo(
-    () => (reportId ? (reportById ?? null) : reports?.[0] ?? null),
+    () => { const report = reportId ? (reportById ?? null) : reports?.[0] ?? null; return report ? correctReportContentScore(report) : null; },
     [reportId, reportById, reports]
   );
 
   const rawScanData = (activeReport as any)?.raw_scan_data ?? {};
-  const previewPayload = rawScanData?.preview_payload ?? {};
+  const previewPayload = rawScanData?.preview_payload ?? (activeReport as any)?.preview_payload ?? {};
   const analysisPayload = rawScanData?.analysis ?? {};
   const crawlerPayload = rawScanData?.crawler ?? {};
   const scoreBreakdownPayload = previewPayload?.score_breakdown ?? (activeReport as any)?.score_breakdown ?? {};
@@ -2639,7 +2646,7 @@ export function ReportPage() {
   const fallbackScores = [performanceScore, seoScore, technicalScore, accessibilityScore].filter((value) => value > 0);
   const aiScore = clampScore((activeReport as any)?.ai_score ?? (fallbackScores.length ? fallbackScores.reduce((sum, value) => sum + value, 0) / fallbackScores.length : 72), 72);
   const overallScore = aiScore;
-  const priorScore = clampScore((previousReport as any)?.ai_score ?? null, 0);
+  const priorScore = clampScore(previousReport ? correctReportContentScore(previousReport).ai_score : null, 0);
   const scoreDelta = previousReport ? overallScore - priorScore : 0;
   const projectedScore = Math.min(
     100,
@@ -2740,26 +2747,25 @@ export function ReportPage() {
   const auditSections: AuditSection[] = useMemo(() => {
     const sortedRows = [...reportRows].sort((left, right) => rankSeverity(left.severity) - rankSeverity(right.severity));
     const topIssue = sortedRows[0];
-    const firstAiIssue = sortedRows.find((row) => row.bucket === "ai-search-visibility") ?? topIssue;
-    const firstContentIssue = sortedRows.find((row) => row.bucket === "content-intelligence") ?? topIssue;
-    const firstStructuredIssue = sortedRows.find((row) => row.bucket === "structured-data") ?? topIssue;
-    const firstUxIssue = sortedRows.find((row) => row.bucket === "ux-accessibility") ?? topIssue;
-    const firstPerformanceIssue = sortedRows.find((row) => row.bucket === "technical-performance") ?? topIssue;
-    const firstSeoIssue = sortedRows.find((row) => row.bucket === "seo-foundation") ?? topIssue;
+    const firstAiIssue = sortedRows.find((row) => row.bucket === "ai-search-visibility");
 
-    const pagesWithTitle = crawlerPages.filter((page) => Boolean(page?.title)).length;
-    const pagesWithMeta = crawlerPages.filter((page) => Boolean(page?.metaDescription)).length;
+
+    const firstUxIssue = sortedRows.find((row) => row.bucket === "ux-accessibility");
+    const firstPerformanceIssue = sortedRows.find((row) => row.bucket === "technical-performance");
+    const firstSeoIssue = sortedRows.find((row) => row.bucket === "seo-foundation");
+
+    const pagesWithTitle = crawlerPages.filter((page) => hasContentText(page?.title)).length;
+    const pagesWithMeta = crawlerPages.filter((page) => hasContentText(page?.metaDescription)).length;
     const pagesWithH1 = crawlerPages.filter((page) => Number(page?.h1Count ?? 0) === 1).length;
-    const pagesWithSchema = crawlerPages.filter((page) => (page?.schemaTypes?.length ?? 0) > 0).length;
+    const pagesWithHeadingStructure = crawlerPages.filter(page => Number(page.h1Count) === 1 && Number(page.h2Count) >= 2).length;
+
     const pagesWithAltText = crawlerPages.filter((page) => Number(page?.imageCount ?? 0) > 0 && Number(page?.imageAltCount ?? 0) > 0).length;
     const totalImages = crawlerPages.reduce((sum, page) => sum + Number(page?.imageCount ?? 0), 0);
     const totalAltImages = crawlerPages.reduce((sum, page) => sum + Number(page?.imageAltCount ?? 0), 0);
     const altCoverage = totalImages > 0 ? totalAltImages / totalImages : null;
-    const totalWordCount = crawlerPages.reduce((sum, page) => sum + Number(page?.wordCount ?? 0), 0);
-    const contentDepth = contentDepthDisplay(totalWordCount);
-    const avgPageScore = crawlerPages.length
-      ? crawlerPages.reduce((sum, page) => sum + Number(page?.pageScore ?? 0), 0) / crawlerPages.length
-      : null;
+    const contentScoreDetails = calculateContentScore(crawlerPages);
+    const contentDepth = contentScoreDetails ? contentDepthDisplay(contentScoreDetails.depthCoverage) : { value: "Not checked", detail: "No readable crawl data is available. Run a new scan to assess content depth." };
+    const avgPageScore = contentScoreDetails?.pageQuality ?? null;
     const firstContentPaintMs = (rawScanData?.metrics?.fcp as number | undefined) ?? null;
     const loadSpeedDetail = firstContentPaintMs
       ? firstPerformanceIssue?.suggestion ?? "The first visible content loaded successfully. Keep scripts and large assets lean so pages stay fast."
@@ -2768,19 +2774,21 @@ export function ReportPage() {
         : "Speed timing was not available for this scan. This can happen when the performance provider does not return lab data for the page.";
     const internalLinksOut = crawlerPages.reduce((sum, page) => sum + Number(page?.internalLinksOut ?? 0), 0);
     const internalLinksIn = crawlerPages.reduce((sum, page) => sum + Number(page?.internalLinksIn ?? 0), 0);
-    const schemaTypes = Array.from(new Set(crawlerPages.flatMap((page) => safeArray<string>(page?.schemaTypes))));
-    const structuredDetails = structuredDetailDisplay(schemaTypes);
-    const schemaItemCount = Number(schemaValidation?.itemCount ?? 0);
-    const schemaErrorCount = Number(schemaValidation?.errorCount ?? 0);
-    const schemaWarningCount = Number(schemaValidation?.warningCount ?? 0);
+    const detailsScoreDetails = calculateDetailsScore(crawlerPages, schemaValidation);
+    const pagesWithSchema = detailsScoreDetails?.pagesWithSchema ?? 0;
+    const structuredDetails = structuredDetailDisplay(detailsScoreDetails?.types ?? []);
+    const schemaItemCount = detailsScoreDetails?.itemCount ?? 0;
+    const schemaErrorCount = detailsScoreDetails?.errorCount ?? 0;
+    const schemaWarningCount = detailsScoreDetails?.warningCount ?? 0;
+    const businessMatch = businessDetailsMatch(napConsistency);
     const topicClusters = safeArray<any>(topicAnalysis?.clusters);
     const thinTopics = safeArray<string>(topicAnalysis?.thinTopics);
-    const napInconsistentFields = safeArray<string>(napConsistency?.inconsistentFields);
-    const napDetected = Boolean(napConsistency?.detected);
+
+
     const firstBrokenLink = crawlerBrokenLinks[0];
     const citationVisibility = clampScore((scoreBreakdownPayload?.citation_visibility ?? scoreBreakdownPayload?.citationVisibility ?? overallScore) as number, overallScore);
     const technicalVisibility = clampScore((scoreBreakdownPayload?.technical_visibility ?? scoreBreakdownPayload?.technicalVisibility ?? technicalScore) as number, technicalScore);
-    const contentVisibility = clampScore((scoreBreakdownPayload?.content_visibility ?? scoreBreakdownPayload?.contentVisibility ?? overallScore) as number, overallScore);
+    const contentVisibility = contentScoreDetails?.score ?? null;
     const aiUnderstanding = clampScore((scoreBreakdownPayload?.ai_understanding ?? scoreBreakdownPayload?.aiUnderstanding ?? overallScore) as number, overallScore);
     const overallSnapshot = clampScore((scoreBreakdownPayload?.overall_score ?? scoreBreakdownPayload?.overallScore ?? overallScore) as number, overallScore);
     const entityConfidence = clampScore(entityEnrichment?.confidence ?? 0, 0);
@@ -2789,7 +2797,17 @@ export function ReportPage() {
     const answerSectionCount = crawlerPages.reduce((sum, page) => sum + safeArray<any>(page?.chunks).length, 0);
     const linkStructure = linkStructureDisplay(internalLinksOut, internalLinksIn);
     const discoverySignal = discoveryNoteDisplay(crawlerDiscoveryNotes[0]);
-    const sitemapStatus = sitemapStatusDisplay(Number(rawScanData?.crawler?.sitemapUrls?.length ?? 0));
+    const sitemapCount = Number(rawScanData?.crawler?.sitemapUrls?.length ?? 0);
+    const sitemapStatus = sitemapStatusDisplay(sitemapCount);
+    const hasCrawlEvidence = crawlerPages.length > 0;
+    const pagesWithTitlesAndMeta = crawlerPages.filter(page => hasContentText(page.title) && hasContentText(page.metaDescription)).length;
+    const canonicalPages = crawlerPages.filter(page => Boolean(page.canonicalUrl)).length;
+    const localizedPages = crawlerPages.filter(page => (page.hreflangLinks?.length ?? 0) > 0).length;
+    const issueSeverity = (keys: string[]) => highestAuditSeverity(reportFindings.filter(finding => keys.includes(finding?.signalKey)).map(finding => finding?.severity));
+    const checkTone = (positive: boolean, available: boolean, fallback = "Medium", keys: string[] = []) => auditTone({ available, positive, severity: positive ? undefined : issueSeverity(keys) ?? fallback });
+    const numericTone = (score: number | null, available: boolean, keys: string[] = []) => auditTone({ available, score, severity: issueSeverity(keys) });
+    const hasMetric = (key: string, storedScore: number) => typeof rawScanData?.lighthouseResult?.categories?.[key]?.score === "number" || storedScore > 0;
+    const quickWin = sortedRows.find(row => row.severity === "Medium") ?? sortedRows[1];
 
     return [
       {
@@ -2806,7 +2824,7 @@ export function ReportPage() {
             detail:
               firstAiIssue?.suggestion ??
               `Pages with clear structure, helpful details, and direct answers are easier for AI tools to cite.`,
-            tone: "violet",
+            tone: auditTone({ available: typeof (scoreBreakdownPayload?.citation_visibility ?? scoreBreakdownPayload?.citationVisibility) === "number", score: citationVisibility, severity: firstAiIssue?.severity }),
           },
           {
             label: "AI Understanding",
@@ -2814,7 +2832,7 @@ export function ReportPage() {
             detail:
               previewPayload?.summary ??
               "Clear business details, easy-to-read content, and accessible pages help AI tools understand the site.",
-            tone: "rose",
+            tone: numericTone(aiUnderstanding, typeof (scoreBreakdownPayload?.ai_understanding ?? scoreBreakdownPayload?.aiUnderstanding) === "number"),
           },
         ],
       },
@@ -2823,34 +2841,34 @@ export function ReportPage() {
         eyebrow: "Content clarity",
         title: "Content Clarity",
         description: `How clearly the site explains its brand, services, topics, and locations for ${verticalProfile.contentFocus.toLowerCase()}.`,
-        score: clampScore(contentVisibility, overallScore),
+        score: contentVisibility,
         scoreLabel: "Content Visibility",
+        footer: "Based on reviewed pages: titles 20%, meta descriptions 20%, headings 25%, content depth 20%, and page quality 15%. This estimates content readiness, not actual placement in AI answers.",
         tiles: [
           {
             label: "Titles / Meta",
-            value: coverageLabel(Math.min(pagesWithTitle, pagesWithMeta), crawlerPages.length),
+            value: coverageLabel(crawlerPages.filter(page => hasContentText(page.title) && hasContentText(page.metaDescription)).length, crawlerPages.length),
             detail:
-              firstContentIssue?.suggestion ??
-              `Unique titles and meta descriptions help the site surface the right pages for AI and search.`,
-            tone: "violet",
+              crawlerPages.length ? `${pagesWithTitle}/${crawlerPages.length} reviewed pages have titles; ${pagesWithMeta}/${crawlerPages.length} have meta descriptions. Add a unique, descriptive title and meta description to each page.` : "No crawl data is available to check titles and meta descriptions.",
+            tone: checkTone(pagesWithTitlesAndMeta === crawlerPages.length, hasCrawlEvidence, pagesWithTitle < crawlerPages.length ? "High" : "Medium", ["title_gap", "meta_description_gap"]),
           },
           {
             label: "Heading Structure",
-            value: coverageLabel(pagesWithH1, crawlerPages.length, { none: "Needs work", partial: "Partial", full: "Clear" }),
-            detail: `One clear H1 and well-nested supporting headings improve readability and answer extraction.`,
-            tone: "amber",
+            value: coverageLabel(pagesWithHeadingStructure, crawlerPages.length, { none: "Needs work", partial: "Partial", full: "Clear" }),
+            detail: `${pagesWithH1}/${crawlerPages.length} reviewed pages have exactly one H1; ${pagesWithHeadingStructure}/${crawlerPages.length} also have at least two H2 sections. Use one clear H1 with descriptive H2 sections; heading nesting is not assessed by this check.`,
+            tone: checkTone(pagesWithHeadingStructure === crawlerPages.length, hasCrawlEvidence, pagesWithH1 === 0 ? "High" : "Medium", ["heading_hierarchy_gap"]),
           },
           {
             label: "Content Depth",
             value: contentDepth.value,
             detail: contentDepth.detail,
-            tone: "sky",
+            tone: checkTone((contentScoreDetails?.depthCoverage ?? 0) >= 0.8, hasCrawlEvidence, "Medium", ["thin_content"]),
           },
           {
             label: "Page Quality",
             value: formatPercent(avgPageScore),
-            detail: `This reflects whether reviewed pages are clear, complete, and easy for visitors and AI tools to understand.`,
-            tone: "emerald",
+            detail: `Average page audit score across reviewed pages, based on metadata, headings, content length, canonical tags, schema, FAQs, and indexing directives.`,
+            tone: numericTone(avgPageScore, hasCrawlEvidence),
           },
           {
             label: "Topic Clusters",
@@ -2859,16 +2877,16 @@ export function ReportPage() {
               topicClusters.length > 0
                 ? `Top themes: ${topicClusters.slice(0, 3).map((cluster) => String(cluster?.topic ?? "")).filter(Boolean).join(", ")}.`
                 : "The scan needs readable page content to identify recurring topics.",
-            tone: "violet",
+            tone: auditTone({}),
           },
           {
             label: "Topic Coverage",
-            value: thinTopics.length > 0 ? `${thinTopics.length} opportun${thinTopics.length === 1 ? "y" : "ies"}` : "No gaps found",
+            value: topicClusters.length === 0 ? "Not enough data" : thinTopics.length > 0 ? `${thinTopics.length} opportun${thinTopics.length === 1 ? "y" : "ies"}` : "No gaps detected",
             detail:
               thinTopics.length > 0
                 ? `Topics with limited coverage: ${thinTopics.slice(0, 3).join(", ")}.`
-                : "No major topic gaps were identified in the reviewed pages.",
-            tone: thinTopics.length > 0 ? "amber" : "emerald",
+                : topicClusters.length === 0 ? "Not enough topic data is available to assess coverage." : "No limited-coverage clusters were detected in the sampled pages. This does not establish complete topic coverage.",
+            tone: checkTone(thinTopics.length === 0, topicClusters.length > 0, "Medium", ["topic_coverage"]),
           },
         ],
         wide: true,
@@ -2878,49 +2896,40 @@ export function ReportPage() {
         eyebrow: "AI-readable details",
         title: "Site Details AI Can Read",
         description: `How clearly the site explains key details like ${verticalProfile.structuredFocus.toLowerCase()} in a format AI tools can understand.`,
-        score: clampScore(Math.max(technicalVisibility, seoScore || 0)),
+        score: detailsScoreDetails?.score ?? null,
         scoreLabel: "Details Clarity",
+        footer: "Based on reviewed pages: structured-data coverage 50%, basic validation 30%, and recognized detail types 20%. SEO and speed scores do not contribute. Business-details matching is a separate evidence check.",
         tiles: [
           {
             label: "Site Detail Check",
-            value: schemaItemCount <= 0 ? "Not found" : schemaErrorCount > 0 || schemaWarningCount > 0 ? "Needs review" : "Clear",
-            detail:
-              schemaErrorCount > 0
-                ? `Some issues and recommendations were found in the site's machine-readable details. Review the affected items in the evidence section.`
-                : schemaItemCount > 0
-                  ? schemaWarningCount > 0
-                    ? "The detected site details include key information AI tools expect, with a few recommendations to review."
-                    : "The detected site details include the key information AI tools expect."
-                  : "No structured details were found on the reviewed pages.",
-            tone: schemaErrorCount > 0 ? "amber" : "emerald",
+            value: !crawlerPages.length || !detailsScoreDetails?.validationAvailable ? "Not checked" : schemaErrorCount > 0 || schemaWarningCount > 0 ? "Needs review" : schemaItemCount > 0 ? "Clear" : "Not found",
+            detail: !crawlerPages.length || !detailsScoreDetails?.validationAvailable
+              ? "No validation evidence is available. Run a new scan to check structured data."
+              : schemaErrorCount > 0 || schemaWarningCount > 0
+                ? `Basic checks found ${schemaErrorCount} error(s) and ${schemaWarningCount} warning(s) in ${schemaItemCount} parsed item(s). Review the schema evidence and fix the affected markup.`
+                : schemaItemCount > 0 ? `${schemaItemCount} structured-data item(s) passed the basic checks. This does not verify all schema properties or eligibility for search features.`
+                : "No JSON-LD structured-data items were found in the reviewed pages.",
+            tone: checkTone(schemaItemCount > 0 && schemaErrorCount === 0 && schemaWarningCount === 0, hasCrawlEvidence && !!detailsScoreDetails?.validationAvailable, schemaItemCount === 0 || schemaErrorCount > 0 ? "High" : "Medium", ["schema_validation", "schema_gap"]),
           },
           {
             label: "AI-Readable Pages",
             value: coverageLabel(pagesWithSchema, crawlerPages.length, { none: "Not found", partial: "Partial", full: "Strong" }),
-            detail:
-              firstStructuredIssue?.suggestion ??
-              `Shows whether key pages include clear details that help AI tools understand the business, services, products, reviews, or FAQs.`,
-            tone: "emerald",
+            detail: crawlerPages.length
+              ? `${pagesWithSchema}/${crawlerPages.length} reviewed pages contain detected JSON-LD details. Add appropriate business, website, and page-type schema where it is missing; detected markup may still need validation fixes.`
+              : "No crawl evidence is available to assess structured-data coverage.",
+            tone: checkTone(pagesWithSchema === crawlerPages.length, hasCrawlEvidence, pagesWithSchema === 0 ? "High" : "Medium", ["schema_gap"]),
           },
           {
             label: "Detail Types",
-            value: structuredDetails.value,
-            detail: structuredDetails.detail,
-            tone: "sky",
+            value: crawlerPages.length ? structuredDetails.value : "Not checked",
+            detail: crawlerPages.length ? structuredDetails.detail : "No crawl evidence is available to identify structured-data types.",
+            tone: checkTone((detailsScoreDetails?.typeCoverage ?? 0) > 0, hasCrawlEvidence, detailsScoreDetails?.types.length ? "Info" : "High", ["schema_gap"]),
           },
           {
             label: "Business Details Match",
-            value: !napDetected
-              ? "Not detected"
-              : napInconsistentFields.length > 0
-                ? "Needs review"
-                : "Consistent",
-            detail: !napDetected
-              ? "No clear business name, address, or phone details were found on the reviewed pages."
-              : napInconsistentFields.length > 0
-                ? `Different ${napInconsistentFields.join(", ")} value(s) were found across the reviewed key pages.`
-                : "Business name, address, and phone details match across the reviewed key pages with available data.",
-            tone: napInconsistentFields.length > 0 ? "amber" : napDetected ? "emerald" : "slate",
+            value: businessMatch.value,
+            detail: businessMatch.detail,
+            tone: checkTone(businessMatch.value === "Consistent", businessMatch.value === "Consistent" || businessMatch.value === "Partial match" || businessMatch.value === "Needs review", businessMatch.value === "Needs review" ? "High" : "Medium", ["nap_inconsistency"]),
           },
         ],
       },
@@ -2939,25 +2948,25 @@ export function ReportPage() {
               externalProfiles.length > 0
                 ? `External profiles help confirm the brand identity across the web.`
                 : "The site does not provide enough trusted external brand links yet.",
-            tone: "violet",
+            tone: checkTone(externalProfiles.length > 0, !!entityEnrichment?.confidence || hasCrawlEvidence, "Low", ["entity_enrichment_gap"]),
           },
           {
             label: "Answer Sections",
             value: availableLabel(answerSectionCount, { none: "Needs more detail", some: "Available" }),
             detail: `Clear content sections make it easier for AI tools to pull useful answers from the site.`,
-            tone: "sky",
+            tone: checkTone(answerSectionCount > 0, crawlerPages.some(page => Array.isArray(page.chunks)), "Medium", ["faq_gap"]),
           },
           {
             label: "Internal Link Structure",
             value: linkStructure.value,
             detail: linkStructure.detail,
-            tone: "emerald",
+            tone: checkTone(internalLinksOut + internalLinksIn >= 20, hasCrawlEvidence, "Medium"),
           },
           {
             label: "Discovery Check",
             value: discoverySignal.value,
             detail: discoverySignal.detail,
-            tone: "amber",
+            tone: auditTone({}),
           },
         ],
         wide: true,
@@ -2976,7 +2985,7 @@ export function ReportPage() {
             detail:
               firstUxIssue?.suggestion ??
               `Clear page structure makes the site easier for screen readers and AI tools to understand.`,
-            tone: "rose",
+            tone: auditTone({ available: hasMetric("accessibility", accessibilityScore), score: accessibilityScore, severity: firstUxIssue?.severity ?? issueSeverity(["accessibility_score"]) }),
           },
           {
             label: "Image Alt Coverage",
@@ -2985,7 +2994,7 @@ export function ReportPage() {
               pagesWithAltText > 0
                 ? "Image alt text was found on reviewed pages that include images."
                 : "Add descriptive alt text to improve accessibility and multimodal understanding.",
-            tone: "emerald",
+            tone: numericTone(altCoverage === null ? null : altCoverage * 100, altCoverage !== null),
           },
           {
             label: "Preferred Page Signals",
@@ -2995,13 +3004,13 @@ export function ReportPage() {
               full: "Clear",
             }),
             detail: `These signals help search engines and AI tools understand which version of a similar page should be trusted.`,
-            tone: "sky",
+            tone: checkTone(canonicalPages === crawlerPages.length, hasCrawlEvidence, "Medium", ["canonical_gap"]),
           },
           {
             label: "Pages Hidden From Search",
-            value: crawlerPages.some((page) => Boolean(page?.noindex)) ? "Needs review" : "Clear",
+            value: !hasCrawlEvidence ? "Not checked" : crawlerPages.some((page) => Boolean(page?.noindex)) ? "Needs review" : "Clear",
             detail: `Review pages blocked from search so important content stays visible.`,
-            tone: "amber",
+            tone: checkTone(!crawlerPages.some(page => Boolean(page.noindex)), hasCrawlEvidence, "High", ["noindex_detected"]),
           },
         ],
       },
@@ -3017,13 +3026,13 @@ export function ReportPage() {
             label: "Page Load Speed",
             value: firstContentPaintMs ? formatMs(firstContentPaintMs) : "Not measured",
             detail: loadSpeedDetail,
-            tone: "violet",
+            tone: auditTone({ available: !!firstContentPaintMs || !!firstPerformanceIssue, score: firstContentPaintMs ? firstContentPaintMs <= 1800 ? 100 : firstContentPaintMs <= 3000 ? 60 : 0 : null, severity: firstPerformanceIssue?.severity }),
           },
           {
             label: "Page Quality",
             value: formatPercent(avgPageScore),
             detail: `This reflects whether important pages are clear, complete, and technically reliable.`,
-            tone: "emerald",
+            tone: numericTone(avgPageScore, hasCrawlEvidence),
           },
         ],
       },
@@ -3041,13 +3050,13 @@ export function ReportPage() {
             detail:
               firstSeoIssue?.suggestion ??
               `Search visibility, page titles, and descriptions still help AI tools discover and understand the site.`,
-            tone: "emerald",
+            tone: auditTone({ available: hasMetric("seo", seoScore), score: seoScore, severity: firstSeoIssue?.severity }),
           },
           {
             label: "Sitemap Status",
             value: sitemapStatus.value,
             detail: sitemapStatus.detail,
-            tone: "sky",
+            tone: checkTone(sitemapCount > 0, hasCrawlEvidence, "Medium", ["sitemap_missing"]),
           },
           {
             label: "Preferred Page Signals",
@@ -3057,7 +3066,7 @@ export function ReportPage() {
               full: "Clear",
             }),
             detail: `These signals help search engines and AI tools trust the right version of similar pages.`,
-            tone: "violet",
+            tone: checkTone(canonicalPages === crawlerPages.length, hasCrawlEvidence, "Medium", ["canonical_gap"]),
           },
         ],
       },
@@ -3073,7 +3082,7 @@ export function ReportPage() {
             label: "AI Bot Access",
             value: aiBotAccess.value,
             detail: aiBotAccess.detail,
-            tone: aiBotAccess.tone,
+            tone: checkTone(aiBotAccess.value === "Allowed", aiBotAccess.value !== "Not checked", aiBotAccess.value === "Blocked" ? "High" : "Medium"),
           },
           {
             label: "Official Profile Links",
@@ -3082,7 +3091,7 @@ export function ReportPage() {
               sameAsUrls.length > 0
                 ? "These links help AI tools confirm that the website, social profiles, and trusted listings belong to the same brand."
                 : "Add official profile links so AI tools can connect the website to the right brand, social profiles, and trusted listings.",
-            tone: "rose",
+            tone: checkTone(sameAsUrls.length > 0, hasCrawlEvidence, "Low", ["entity_enrichment_gap"]),
           },
           {
             label: "Language Targeting",
@@ -3095,7 +3104,7 @@ export function ReportPage() {
               crawlerPages.some((page) => (page?.hreflangLinks?.length ?? 0) > 0)
                 ? "Some pages clearly tell search engines which language or region they are for."
                 : "Localized pages may need clearer language and region targeting.",
-            tone: "violet",
+            tone: checkTone(localizedPages === crawlerPages.length, hasCrawlEvidence && localizedPages > 0, "Medium", ["hreflang_incomplete"]),
           },
           {
             label: "Internal Link Health",
@@ -3104,7 +3113,7 @@ export function ReportPage() {
               firstBrokenLink?.url
                 ? "A broken internal link was found and should be repaired or redirected."
                 : "Internal link health looks stable in the reviewed pages.",
-            tone: crawlerBrokenLinks.length > 0 ? "rose" : "emerald",
+            tone: checkTone(crawlerBrokenLinks.length === 0, hasCrawlEvidence, "Medium", ["broken_links"]),
           },
         ],
         wide: true,
@@ -3123,7 +3132,7 @@ export function ReportPage() {
             detail:
               topIssue?.suggestion ??
               `Start here because this issue is most likely to affect how AI tools understand or recommend the site.`,
-            tone: "rose",
+            tone: auditTone({ positive: !topIssue && hasCrawlEvidence, severity: topIssue?.severity }),
           },
           {
             label: "Quick Win",
@@ -3132,13 +3141,13 @@ export function ReportPage() {
               sortedRows[1]?.parameter ??
               "Content refinement",
             detail: `This is a practical improvement that can make the site clearer for both visitors and AI tools.`,
-            tone: "amber",
+            tone: auditTone({ severity: quickWin?.severity }),
           },
           {
             label: "Long-Term Improvement",
             value: sameAsUrls.length > 0 ? "Profile links found" : "Add profile links",
             detail: `Official profile links help AI tools connect the website to the right brand, audience, and trusted sources.`,
-            tone: "emerald",
+            tone: checkTone(sameAsUrls.length > 0, hasCrawlEvidence, "Low", ["entity_enrichment_gap"]),
           },
         ],
         wide: true,
@@ -3160,6 +3169,7 @@ export function ReportPage() {
     previewPayload?.summary,
     rawScanData,
     reportRows,
+    reportFindings,
     scoreBreakdownPayload,
     seoScore,
     technicalScore,
@@ -3732,7 +3742,7 @@ Website: ${displayHost}`);
                   {[
                     { id: "executive-summary", label: "Executive Summary", icon: BarChart3 },
                     { id: "ai-audit", label: isGuest ? "AI Visibility Audit" : "AI Visibility Audit", icon: Bot },
-                    { id: "implementation-plan", label: isGuest ? "Findings & Recommendations" : "Findings & Recommendations", icon: ShieldCheck },
+                    { id: "implementation-plan", label: isGuest ? "Findings & Fixes" : "Findings & Fixes", icon: ShieldCheck },
                     { id: "roadmap", label: isGuest ? "Improvement Roadmap" : "Improvement Roadmap", icon: Rocket },
                   ].map((item) => {
                     const isLockedGuestTab = isGuest && item.id !== "executive-summary";
@@ -3828,7 +3838,7 @@ Website: ${displayHost}`);
                   </div>
                 </div>
 
-                <div className="grid gap-8 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+                <div className="grid items-start gap-8 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
                   <div className="flex flex-col items-center justify-center rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(122,116,239,0.25),transparent_48%),linear-gradient(180deg,rgba(16,22,43,0.96)_0%,rgba(12,17,31,0.98)_100%)] px-6 py-8">
                     <div className="relative h-56 w-56">
                       <svg className="h-full w-full -rotate-90">
@@ -3885,7 +3895,7 @@ Website: ${displayHost}`);
                     ) : null}
 
                     <div>
-                      <h1 className="text-[34px] font-semibold tracking-tight text-white md:text-[54px] md:leading-[1.02]">
+                      <h1 className="text-[28px] font-semibold leading-[1.1] tracking-tight text-white md:text-[40px]">
                         {reportDisplayTitle}
                       </h1>
                       <p className={`mt-5 max-w-3xl text-[16px] leading-8 md:text-[18px] ${isGuest ? "text-[#f1cf7f]" : "text-white/65"}`}>
@@ -4040,7 +4050,7 @@ Website: ${displayHost}`);
                       label: "Brand Trust Signal",
                       value: `${clampScore(entityEnrichment?.confidence ?? 0, 0)}/100`,
                       detail: entityEnrichment?.brandName ? `Brand identity detected for ${entityEnrichment.brandName}.` : "No strong external brand proof was detected.",
-                      tone: "emerald" as const,
+                      tone: "violet" as const,
                     },
                     {
                       label: "Report Confidence",

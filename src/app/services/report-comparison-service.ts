@@ -1,3 +1,4 @@
+import { correctReportContentScore } from "../../../supabase/functions/_shared/content-scoring";
 export type ReportComparisonInput = {
   id: string;
   website_id?: string | null;
@@ -196,7 +197,7 @@ function buildInsightBullets(comparison: Omit<ReportComparison, "insightBullets"
 export function buildReportComparison(selectedReports: ReportComparisonInput[]): ReportComparison | null {
   if (selectedReports.length < 2) return null;
 
-  const reports = [...selectedReports].sort((left, right) => {
+  const reports = selectedReports.map(report => correctReportContentScore(report)).sort((left, right) => {
     const leftTime = left.generated_at ? new Date(left.generated_at).getTime() : 0;
     const rightTime = right.generated_at ? new Date(right.generated_at).getTime() : 0;
     return leftTime - rightTime;

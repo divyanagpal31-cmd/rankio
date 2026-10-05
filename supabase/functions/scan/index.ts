@@ -1,7 +1,9 @@
+import { collectSchemaTypes, calculateDetailsScore, DETAILS_SCORING_VERSION } from "../_shared/structured-scoring.ts";
+import { calculateContentScore, calculateVerticalLift, CONTENT_SCORING_VERSION, hasContentText } from "../_shared/content-scoring.ts";
 import { serve } from "https://deno.land/std@0.210.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-const scanVersion = "2026-06-09-architecture-v1";
+const scanVersion = "2026-10-05-content-and-details-v3";
 const crawlerVersion = "2026-09-19-ai-robots-access-v1";
 const psiVersion = "pagespeedonline/v5";
 const crawlLimit = 12;
@@ -606,15 +608,7 @@ function extractSchemaTypes(html: string): string[] {
     if (!raw) continue;
     try {
       const parsed = JSON.parse(raw);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      for (const item of items) {
-        const type = item?.["@type"];
-        if (Array.isArray(type)) {
-          for (const subType of type) types.add(String(subType));
-        } else if (type) {
-          types.add(String(type));
-        }
-      }
+      for (const type of collectSchemaTypes(parsed)) types.add(type);
     } catch {
       // ignore invalid json-ld
     }
@@ -1888,8 +1882,8 @@ function buildAnalysisFindings(
   const totalHreflang = pages.reduce((sum, page) => sum + page.hreflangLinks.length, 0);
   const pagesWithHreflang = pages.filter((page) => page.hreflangLinks.length > 0).length;
   const totalWordCount = pages.reduce((sum, page) => sum + page.wordCount, 0);
-  const pagesWithMeta = pages.filter((page) => Boolean(page.metaDescription)).length;
-  const pagesWithTitle = pages.filter((page) => Boolean(page.title)).length;
+  const pagesWithMeta = pages.filter((page) => hasContentText(page.metaDescription)).length;
+  const pagesWithTitle = pages.filter((page) => hasContentText(page.title)).length;
   const pagesWithOneH1 = pages.filter((page) => page.h1Count === 1).length;
   const pagesWithCanonical = pages.filter((page) => Boolean(page.canonicalUrl)).length;
   const pagesWithNoindex = pages.filter((page) => page.noindex).length;
@@ -1953,6 +1947,18 @@ function buildAnalysisFindings(
     });
   }
 
+  if (pagesWithTitle < pages.length) {
+    findings.push({
+      category: "content",
+      severity: "high",
+      signalKey: "title_gap",
+      title: "Missing page titles",
+      description: `${pages.length - pagesWithTitle} crawled page(s) are missing meaningful titles.`,
+      recommendation: "Add a unique, descriptive title to each important page.",
+      evidence: { pagesWithTitle, totalPages: pages.length },
+      pageUrl: pages.find(page => !hasContentText(page.title))?.url ?? homepage?.url ?? null,
+    });
+  }
   if (pagesWithMeta < pages.length) {
     findings.push({
       category: "content",
@@ -2149,7 +2155,6 @@ function buildScoreBreakdown(
   const homepage = pages[0];
   const crawlability = homepage?.pageScore ?? 50;
   const technicalSignals = pages.reduce((sum, page) => sum + (page.canonicalUrl ? 1 : 0) + (page.noindex ? -1 : 1), 0);
-  const contentSignals = pages.reduce((sum, page) => sum + (page.wordCount > 250 ? 1 : 0) + page.h1Count + page.h2Count, 0);
   const aiSignals = pages.reduce((sum, page) => sum + page.schemaTypes.length * 2 + page.faqCount * 2 + page.chunks.length, 0);
   const hreflangCoverage = pages.length ? pages.filter((page) => page.hreflangLinks.length > 0).length / pages.length : 0;
   const entityConfidence = discovery.entityEnrichment.confidence;
@@ -2184,15 +2189,9 @@ function buildScoreBreakdown(
     ),
   );
 
-  const contentVisibility = Math.round(
-    Math.max(
-      0,
-      Math.min(
-        100,
-        30 + (contentSignals * 2.2) + (pages.filter((page) => page.metaDescription).length * 2) - findings.filter((finding) => finding.category === "content").length * 8,
-      ),
-    ),
-  );
+  const contentScoreDetails = calculateContentScore(pages);
+  const detailsScoreDetails = calculateDetailsScore(pages, discovery.schemaValidation);
+  const contentVisibility = contentScoreDetails?.score ?? 0;
 
   const aiUnderstanding = Math.round(
     Math.max(
@@ -2230,21 +2229,17 @@ function buildScoreBreakdown(
       (citationVisibility * 0.25),
   );
 
-  const verticalLift =
-    vertical === "ecommerce"
-      ? Math.min(10, pages.filter((page) => page.schemaTypes.some((type) => /Product|Offer|Review/i.test(type))).length * 2)
-      : vertical === "saas"
-        ? Math.min(10, pages.filter((page) => /pricing|docs|feature|api/i.test(`${page.title ?? ""} ${page.url}`)).length * 2)
-        : vertical === "local"
-          ? Math.min(10, pages.filter((page) => /location|contact|service/i.test(`${page.title ?? ""} ${page.url}`)).length * 2)
-          : vertical === "content"
-            ? Math.min(10, pages.filter((page) => page.faqCount > 0).length * 2)
-            : 0;
+  const verticalLift = calculateVerticalLift(vertical, pages);
 
   return {
     overallScore: Math.max(0, Math.min(100, overall + verticalLift)),
     technicalVisibility,
     contentVisibility,
+    contentScoringVersion: CONTENT_SCORING_VERSION,
+    contentScoreDetails,
+    detailsClarity: detailsScoreDetails?.score ?? 0,
+    detailsScoreDetails,
+    detailsScoringVersion: DETAILS_SCORING_VERSION,
     aiUnderstanding,
     citationVisibility,
     crawlability,
@@ -2988,7 +2983,7 @@ serve(async (req) => {
   };
 
   const aiSummary = stripMarkdownLinks(
-    `${psiFailureMessage ? "PageSpeed data was unavailable, so this report is based on crawler and content signals. " : ""}AI visibility score ${scoreBreakdown.overallScore}/100 based on Performance ${perf}, SEO ${seo}, Best Practices ${best}, Accessibility ${a11y}. ${findings[0]?.title ? `Top issue: ${findings[0].title}.` : ""}`,
+    `${psiFailureMessage ? "PageSpeed data was unavailable, so this report is based on crawler and content signals. " : ""}AI visibility score ${scoreBreakdown.overallScore}/100 based on technical visibility ${scoreBreakdown.technicalVisibility}, content visibility ${scoreBreakdown.contentVisibility}, AI understanding ${scoreBreakdown.aiUnderstanding}, and citation readiness ${scoreBreakdown.citationVisibility}. ${findings[0]?.title ? `Top issue: ${findings[0].title}.` : ""}`,
   );
 
   const reportLevel = "preview";
@@ -3014,6 +3009,11 @@ serve(async (req) => {
     score_breakdown: {
       technical_visibility: scoreBreakdown.technicalVisibility,
       content_visibility: scoreBreakdown.contentVisibility,
+      contentScoringVersion: CONTENT_SCORING_VERSION,
+      contentScoreDetails: scoreBreakdown.contentScoreDetails,
+      details_clarity: scoreBreakdown.detailsClarity,
+      detailsScoreDetails: scoreBreakdown.detailsScoreDetails,
+      detailsScoringVersion: DETAILS_SCORING_VERSION,
       ai_understanding: scoreBreakdown.aiUnderstanding,
       citation_visibility: scoreBreakdown.citationVisibility,
       overall_score: scoreBreakdown.overallScore,

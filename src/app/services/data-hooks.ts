@@ -1,3 +1,4 @@
+import { correctReportContentScore } from "../../../supabase/functions/_shared/content-scoring";
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../providers/auth-provider";
@@ -191,14 +192,14 @@ export function useWebsites() {
     if (ids.length > 0) {
       const { data: reports, error: rErr } = await supabase
         .from("reports")
-        .select("id, website_id, status, ai_score, generated_at, report_level, access_tier_required, is_cached")
+        .select("id, website_id, status, ai_score, generated_at, report_level, access_tier_required, is_cached, score_breakdown, scoring_pages:raw_scan_data->crawler->pages, scoring_breakdown:raw_scan_data->analysis->scoreBreakdown")
         .in("website_id", ids)
         .eq("status", "completed")
         .order("generated_at", { ascending: false })
         .limit(500);
 
       if (!rErr) {
-        for (const row of (reports ?? []) as any[]) {
+        for (const row of ((reports ?? []) as any[]).map(correctReportContentScore)) {
           const websiteId = String(row.website_id ?? "");
           if (!websiteId) continue;
           if (!latestByWebsiteId[websiteId]) {
@@ -299,7 +300,7 @@ export function useReports() {
       setData([]);
     } else {
       setError(null);
-      setData(((reports ?? []) as any[]).map(({ websites: _websites, ...report }) => report));
+      setData(((reports ?? []) as any[]).map(({ websites: _websites, ...report }) => correctReportContentScore(report)));
     }
     setLoading(false);
   }, [user]);
@@ -400,7 +401,7 @@ export function useStats() {
         const [reportsRes, reportsCountRes] = await Promise.all([
           supabase
             .from("reports")
-            .select("id, website_id, ai_score, status, generated_at")
+            .select("id, website_id, ai_score, status, generated_at, score_breakdown, scoring_pages:raw_scan_data->crawler->pages, scoring_breakdown:raw_scan_data->analysis->scoreBreakdown")
             .in("website_id", websiteIds)
             .eq("status", "completed")
             .order("generated_at", { ascending: false })
@@ -409,7 +410,7 @@ export function useStats() {
         ]);
 
         if (reportsRes.error) throw new Error(reportsRes.error.message);
-        reports = (reportsRes.data ?? []) as any[];
+        reports = ((reportsRes.data ?? []) as any[]).map(correctReportContentScore);
         reportsGenerated = reportsCountRes.count ?? 0;
 
         const scored = reports

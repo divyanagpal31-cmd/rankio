@@ -157,6 +157,32 @@ Views:
 - AI Understanding — 25%
 - Citation Visibility — 25%
 
+### Content Visibility (content-coverage-v2)
+
+The shared calculation in `supabase/functions/_shared/content-scoring.ts` is used by scans and report display. It measures content readiness on the sampled pages, not observed placement in AI answers.
+
+- Titles: 20 points multiplied by the fraction of pages with nonempty titles.
+- Meta descriptions: 20 points multiplied by the fraction with nonempty descriptions.
+- Headings: 20 points for the fraction with exactly one H1, plus up to 5 points for supporting H2s (two per page, only when the H1 is valid).
+- Content depth: 20 points multiplied by the average of each page's word count divided by 800, capped at 1 per page. This is a length proxy, not semantic quality assessment.
+- Page quality: 15 points multiplied by the average bounded page audit score divided by 100.
+
+Round the weighted sum; only fully satisfied observed criteria can receive 100. Additional headings and repeated page sets do not inflate the result. No crawl evidence produces an unavailable content score in the report. Topic clusters and topic coverage are separate descriptive signals, not extra scoring bonuses; missing topic data is not presented as gap-free coverage.
+
+Historical reports with retained crawl evidence are recalculated when read, along with overall scores and numeric summaries. The overall score keeps its other category components and existing industry adjustment. Original stored records are not rewritten; deployment of the frontend and `scan` Edge Function is required for live use. Records without crawl evidence cannot be reliably recalculated and require a new scan.
+
+Run `node --test tests/content-scoring.test.mjs` to verify the scoring invariants and historical report correction.
+### Details Clarity (structured-details-v1)
+
+This section uses its own structured-data score; it does not reuse the maximum of Technical Visibility and SEO. Across reviewed pages, detected JSON-LD coverage contributes 50 points, basic validation quality contributes 30, and presence of recognized detail types contributes 20. Validation failures and warnings reduce quality; unknown validation gets no validation bonus. Markup on one page cannot establish site-wide coverage. The displayed score is unavailable without crawl evidence.
+
+The extractor reads JSON-LD graph nodes and multi-type nodes. Historical report display also uses per-page validator item types to recover evidence omitted by the old graph extractor. Validation is a basic set of property checks, not a complete Schema.org or rich-results validator.
+
+Business-detail consistency is shown separately and does not award score points: all three fields must each have one matching value on at least two pages to show Consistent. Partial comparisons show Partial match; single-page or missing comparison evidence shows Not enough data or Not detected. Missing structured data and validation problems use warning colors.
+
+The scan stores `details_clarity`, calculation details, and its scoring version; the report UI and PDF recompute from retained crawl evidence. This section does not add another weight to the four-category overall score.
+
+Run `node --test tests/structured-scoring.test.mjs` for these regressions.
 ### Notes
 - These weights can be adjusted later by vertical.
 - Example future vertical logic:

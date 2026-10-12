@@ -29,11 +29,69 @@ function getReportIdFromSearch(search: string): string | null {
   return new URLSearchParams(search).get("reportId")?.trim() ?? null;
 }
 
+const BILLING_PAGE_SIZE = 10;
+
+function TablePagination({
+  page,
+  totalCount,
+  onPageChange,
+}: {
+  page: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalCount / BILLING_PAGE_SIZE));
+  const firstItem = totalCount === 0 ? 0 : (page - 1) * BILLING_PAGE_SIZE + 1;
+  const lastItem = Math.min(page * BILLING_PAGE_SIZE, totalCount);
+  const firstPage = Math.max(1, Math.min(page - 2, totalPages - 4));
+  const pageNumbers = Array.from({ length: Math.min(5, totalPages) }, (_, index) => firstPage + index);
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 text-sm text-muted-foreground shadow-sm">
+      <span>Showing {firstItem}–{lastItem} of {totalCount} records</span>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[92px]"
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+        >
+          Previous
+        </Button>
+        {pageNumbers.map((pageNumber) => (
+          <Button
+            key={pageNumber}
+            variant={pageNumber === page ? "default" : "outline"}
+            size="sm"
+            className="h-9 min-w-10 px-3"
+            onClick={() => onPageChange(pageNumber)}
+            aria-current={pageNumber === page ? "page" : undefined}
+          >
+            {pageNumber}
+          </Button>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[68px]"
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function CreditsBilling() {
   const { subscription } = useSubscription();
-  const { subscriptions, loading: historyLoading, error: historyError } = useSubscriptionHistory();
-  const { transactions, loading: transactionsLoading, error: transactionsError } = usePaymentTransactions();
-  const { unlocks, loading: unlocksLoading, error: unlocksError } = useReportUnlockHistory();
+  const [billingPage, setBillingPage] = useState(1);
+  const [creditPage, setCreditPage] = useState(1);
+  const { subscriptions, loading: historyLoading, error: historyError, totalCount: subscriptionCount } = useSubscriptionHistory(billingPage, BILLING_PAGE_SIZE);
+  const { transactions, loading: transactionsLoading, error: transactionsError, totalCount: transactionCount } = usePaymentTransactions(billingPage, BILLING_PAGE_SIZE);
+  const { unlocks, loading: unlocksLoading, error: unlocksError, totalCount: unlockCount } = useReportUnlockHistory(creditPage, BILLING_PAGE_SIZE);
   const { user } = useAuth();
   const location = useLocation();
   const [activePlanId, setActivePlanId] = useState<PaymentPlanId | null>(null);
@@ -51,6 +109,7 @@ export function CreditsBilling() {
     [location.search, reportIdFromState]
   );
   const initialTab = requestedTab ?? (requestedPlan || navigationState?.reason === "report_unlock" ? "plans" : "overview");
+  const billingCount = Math.max(subscriptionCount, transactionCount);
 
   useEffect(() => {
     if (requestedTab === "plans" || requestedPlan || navigationState?.reason === "report_unlock") {
@@ -198,25 +257,25 @@ export function CreditsBilling() {
     : getPaymentPlanName(subscription?.plan_slug ?? subscription?.plan ?? null, subscription?.plan_name ?? null);
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 w-full max-w-full space-y-8 overflow-x-hidden">
       <div>
-        <h1 className="text-3xl text-primary" style={{ fontWeight: 700 }}>
+        <h1 className="text-2xl text-primary sm:text-3xl" style={{ fontWeight: 700 }}>
           Plans & Billing
         </h1>
-        <p className="text-muted-foreground mt-2">
+        <p className="mt-2 max-w-full break-words text-muted-foreground">
           Choose a one-time package. Pay with PayPal and unlock the report credits you need.
         </p>
       </div>
 
-      <Tabs defaultValue={initialTab} className="space-y-6">
-        <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-xl bg-white p-1 shadow-sm">
+      <Tabs defaultValue={initialTab} className="min-w-0 max-w-full space-y-6">
+        <TabsList className="h-auto max-w-full justify-start overflow-x-auto rounded-xl bg-white p-1 shadow-sm">
           <TabsTrigger value="overview" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
           <TabsTrigger value="plans" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Plans</TabsTrigger>
           <TabsTrigger value="billing" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Billing History</TabsTrigger>
           <TabsTrigger value="reports" className="min-w-fit rounded-md px-4 py-2 data-[state=active]:border-transparent data-[state=active]:bg-accent data-[state=active]:text-white data-[state=active]:shadow-sm">Credit Usage</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
+        <TabsContent value="overview" className="min-w-0 space-y-6">
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
           <div className="text-sm text-muted-foreground">Current package</div>
@@ -244,14 +303,14 @@ export function CreditsBilling() {
       </div>
         </TabsContent>
 
-        <TabsContent value="plans" className="space-y-6">
+        <TabsContent value="plans" className="min-w-0 space-y-6">
       <div className="grid gap-6 lg:grid-cols-3">
         {paymentPlans.map((plan) => (
           <Card
             key={plan.id}
-            className={`relative rounded-[2rem] border px-6 py-7 transition-all duration-300 ${
+            className={`relative min-w-0 rounded-[2rem] border px-6 py-7 transition-all duration-300 ${
               plan.popular
-                ? "scale-[1.02] border-[#6a6af1] bg-[#f8f7ff] shadow-[0_20px_60px_rgba(91,91,214,0.16)]"
+                ? "border-[#6a6af1] bg-[#f8f7ff] shadow-[0_20px_60px_rgba(91,91,214,0.16)] sm:scale-[1.02]"
                 : "border-[#6c72e8] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)]"
             }`}
           >
@@ -348,7 +407,7 @@ export function CreditsBilling() {
       </Card>
         </TabsContent>
 
-        <TabsContent value="billing" className="space-y-6">
+        <TabsContent value="billing" className="min-w-0 space-y-6">
       <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -359,15 +418,15 @@ export function CreditsBilling() {
         </div>
 
         <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm [&_td+td]:border-l [&_td+td]:border-slate-100 [&_td+td]:pl-4 [&_th+th]:border-l [&_th+th]:border-slate-100 [&_th+th]:pl-4">
             <thead>
-              <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-3 pr-4 font-semibold">Package</th>
-                <th className="py-3 pr-4 font-semibold">Status</th>
-                <th className="py-3 pr-4 font-semibold">Credits</th>
-                <th className="py-3 pr-4 font-semibold">Purchased On</th>
-                <th className="py-3 pr-4 font-semibold">Ended On</th>
-                <th className="py-3 pr-4 font-semibold">Payment ID</th>
+              <tr className="border-b border-border/60 bg-[#f6f7ff] text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="sticky left-0 z-20 h-14 min-w-[132px] border-r border-slate-200 bg-[#f6f7ff] py-3 pl-3 pr-4 font-semibold md:border-r-0">Package</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Status</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Credits</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Purchased On</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Ended On</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Payment ID</th>
               </tr>
             </thead>
             <tbody>
@@ -380,8 +439,8 @@ export function CreditsBilling() {
               ) : subscriptions.length > 0 ? (
                 subscriptions.map((plan) => (
                   <tr key={plan.id} className="border-b border-border/40 last:border-0">
-                    <td className="py-4 pr-4 font-medium text-primary">{formatPlan(plan.plan_slug ?? plan.plan, plan.plan_name ?? "Plan")}</td>
-                    <td className="py-4 pr-4">
+                    <td className="sticky left-0 z-10 h-20 min-w-[132px] border-r border-slate-200 bg-white py-4 pl-3 pr-4 font-medium text-primary md:border-r-0">{formatPlan(plan.plan_slug ?? plan.plan, plan.plan_name ?? "Plan")}</td>
+                    <td className="h-20 py-4 pr-4">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
                           String(plan.status ?? "").toLowerCase() === "active"
@@ -392,10 +451,10 @@ export function CreditsBilling() {
                         {formatStatus(plan.status)}
                       </span>
                     </td>
-                    <td className="py-4 pr-4 text-muted-foreground">{creditsLabel(plan)}</td>
-                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(plan.start_date ?? plan.created_at)}</td>
-                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(plan.end_date ?? plan.current_period_end)}</td>
-                    <td className="py-4 pr-4 text-muted-foreground">
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{creditsLabel(plan)}</td>
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{formatReadableDate(plan.start_date ?? plan.created_at)}</td>
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{formatReadableDate(plan.end_date ?? plan.current_period_end)}</td>
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">
                       {plan.payment_order_id ? (
                         <span className="font-mono text-xs">{plan.payment_order_id}</span>
                       ) : (
@@ -414,6 +473,7 @@ export function CreditsBilling() {
             </tbody>
           </table>
         </div>
+        <TablePagination page={billingPage} totalCount={subscriptionCount} onPageChange={setBillingPage} />
       </Card>
 
       <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
@@ -426,16 +486,16 @@ export function CreditsBilling() {
         </div>
 
         <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="w-full min-w-[820px] border-separate border-spacing-0 text-left text-sm [&_td+td]:border-l [&_td+td]:border-slate-100 [&_td+td]:pl-4 [&_th+th]:border-l [&_th+th]:border-slate-100 [&_th+th]:pl-4">
             <thead>
-              <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-3 pr-4 font-semibold">Date</th>
-                <th className="py-3 pr-4 font-semibold">Package</th>
-                <th className="py-3 pr-4 font-semibold">Amount</th>
-                <th className="py-3 pr-4 font-semibold">Status</th>
-                <th className="py-3 pr-4 font-semibold">Provider</th>
-                <th className="py-3 pr-4 font-semibold">Order ID</th>
-                <th className="py-3 pr-4 font-semibold">Capture ID</th>
+              <tr className="border-b border-border/60 bg-[#f6f7ff] text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="sticky left-0 z-20 h-14 min-w-[132px] border-r border-slate-200 bg-[#f6f7ff] py-3 pl-3 pr-4 font-semibold md:border-r-0">Date</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Package</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Amount</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Status</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Provider</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Order ID</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Capture ID</th>
               </tr>
             </thead>
             <tbody>
@@ -448,19 +508,19 @@ export function CreditsBilling() {
               ) : transactions.length > 0 ? (
                 transactions.map((transaction) => (
                   <tr key={transaction.id} className="border-b border-border/40 last:border-0">
-                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(transaction.created_at)}</td>
-                    <td className="py-4 pr-4 font-medium text-primary">{formatPlan(transaction.plan_slug, transaction.plan_name)}</td>
-                    <td className="py-4 pr-4 text-muted-foreground">{formatCurrency(transaction.amount, transaction.currency)}</td>
-                    <td className="py-4 pr-4">
+                    <td className="sticky left-0 z-10 h-20 min-w-[132px] border-r border-slate-200 bg-white py-4 pl-3 pr-4 text-muted-foreground md:border-r-0">{formatReadableDate(transaction.created_at)}</td>
+                    <td className="h-20 py-4 pr-4 font-medium text-primary">{formatPlan(transaction.plan_slug, transaction.plan_name)}</td>
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{formatCurrency(transaction.amount, transaction.currency)}</td>
+                    <td className="h-20 py-4 pr-4">
                       <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                         {formatStatus(transaction.status)}
                       </span>
                     </td>
-                    <td className="py-4 pr-4 text-muted-foreground">{formatPlan(transaction.provider)}</td>
-                    <td className="py-4 pr-4 text-muted-foreground">
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{formatPlan(transaction.provider)}</td>
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">
                       {transaction.provider_order_id ? <span className="font-mono text-xs">{transaction.provider_order_id}</span> : "-"}
                     </td>
-                    <td className="py-4 pr-4 text-muted-foreground">
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">
                       {transaction.provider_capture_id ? <span className="font-mono text-xs">{transaction.provider_capture_id}</span> : "-"}
                     </td>
                   </tr>
@@ -475,10 +535,11 @@ export function CreditsBilling() {
             </tbody>
           </table>
         </div>
+        <TablePagination page={billingPage} totalCount={transactionCount} onPageChange={setBillingPage} />
       </Card>
         </TabsContent>
 
-        <TabsContent value="reports" className="space-y-6">
+        <TabsContent value="reports" className="min-w-0 space-y-6">
       <Card className="rounded-2xl border border-border/40 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -489,16 +550,16 @@ export function CreditsBilling() {
         </div>
 
         <div className="mt-5 overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm [&_td+td]:border-l [&_td+td]:border-slate-100 [&_td+td]:pl-4 [&_th+th]:border-l [&_th+th]:border-slate-100 [&_th+th]:pl-4">
             <thead>
-              <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-3 pr-4 font-semibold">Unlocked On</th>
-                <th className="py-3 pr-4 font-semibold">Website</th>
-                <th className="py-3 pr-4 font-semibold">Score</th>
-                <th className="py-3 pr-4 font-semibold">Package</th>
-                <th className="py-3 pr-4 font-semibold">Credit</th>
-                <th className="py-3 pr-4 font-semibold">Reason</th>
-                <th className="py-3 pr-4 font-semibold">Payment ID</th>
+              <tr className="border-b border-border/60 bg-[#f6f7ff] text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="sticky left-0 z-20 h-14 min-w-[132px] border-r border-slate-200 bg-[#f6f7ff] py-3 pl-3 pr-4 font-semibold md:border-r-0">Unlocked On</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Website</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Score</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Package</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Credit</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Reason</th>
+                <th className="h-14 py-3 pr-4 font-semibold">Payment ID</th>
               </tr>
             </thead>
             <tbody>
@@ -511,15 +572,15 @@ export function CreditsBilling() {
               ) : unlocks.length > 0 ? (
                 unlocks.map((unlock) => (
                   <tr key={unlock.id} className="border-b border-border/40 last:border-0">
-                    <td className="py-4 pr-4 text-muted-foreground">{formatReadableDate(unlock.created_at)}</td>
-                    <td className="py-4 pr-4 font-medium text-primary">
+                    <td className="sticky left-0 z-10 h-20 min-w-[132px] border-r border-slate-200 bg-white py-4 pl-3 pr-4 text-muted-foreground md:border-r-0">{formatReadableDate(unlock.created_at)}</td>
+                    <td className="h-20 py-4 pr-4 font-medium text-primary">
                       <Link to={`/report?reportId=${encodeURIComponent(String(unlock.report_id ?? ""))}`} className="hover:underline">
                         {getUnlockWebsite(unlock)}
                       </Link>
                     </td>
-                    <td className="py-4 pr-4 text-muted-foreground">{typeof unlock.reports?.ai_score === "number" ? unlock.reports.ai_score : "-"}</td>
-                    <td className="py-4 pr-4 text-muted-foreground">{formatPlan(unlock.plan_slug)}</td>
-                    <td className="py-4 pr-4">
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{typeof unlock.reports?.ai_score === "number" ? unlock.reports.ai_score : "-"}</td>
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{formatPlan(unlock.plan_slug)}</td>
+                    <td className="h-20 py-4 pr-4">
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-semibold ${
                           unlock.credit_used ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
@@ -528,8 +589,8 @@ export function CreditsBilling() {
                         {unlock.credit_used ? "Used" : "No"}
                       </span>
                     </td>
-                    <td className="py-4 pr-4 text-muted-foreground">{formatUnlockReason(unlock.unlock_reason, unlock.credit_used)}</td>
-                    <td className="py-4 pr-4 text-muted-foreground">
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">{formatUnlockReason(unlock.unlock_reason, unlock.credit_used)}</td>
+                    <td className="h-20 py-4 pr-4 text-muted-foreground">
                       {unlock.payment_transactions?.provider_order_id ? (
                         <span className="font-mono text-xs">{unlock.payment_transactions.provider_order_id}</span>
                       ) : (
@@ -548,6 +609,7 @@ export function CreditsBilling() {
             </tbody>
           </table>
         </div>
+        <TablePagination page={creditPage} totalCount={unlockCount} onPageChange={setCreditPage} />
       </Card>
         </TabsContent>
       </Tabs>

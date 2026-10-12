@@ -120,13 +120,13 @@ export function WhyRankio() {
             <div className="md:hidden">
               <div className="grid grid-cols-[minmax(150px,42%)_minmax(0,1fr)]">
                 <div className="border-r border-[#edf0f7] bg-white">
-                  <div className="flex min-h-[64px] items-center bg-[#f6f7ff] px-4 py-4 text-sm font-semibold text-[#232c41]">
+                  <div className="flex h-16 items-center bg-[#f6f7ff] px-4 py-4 text-sm font-semibold text-[#232c41]">
                     Feature
                   </div>
                   {comparisonRows.map((row, index) => (
                     <div
                       key={row.feature}
-                      className={`flex min-h-[92px] items-center px-4 py-4 text-sm font-medium leading-5 text-[#232c41] ${
+                      className={`flex h-[92px] items-center px-4 py-4 text-sm font-medium leading-5 text-[#232c41] ${
                         index !== comparisonRows.length - 1 ? "border-b border-[#edf0f7]" : ""
                       }`}
                     >
@@ -137,14 +137,14 @@ export function WhyRankio() {
 
                 <div className="overflow-x-auto">
                   <div className="min-w-[390px]">
-                    <div className="grid min-h-[64px] grid-cols-2 bg-[#f6f7ff] text-left">
+                    <div className="grid h-16 grid-cols-2 bg-[#f6f7ff] text-left">
                       <div className="flex items-center px-4 py-4 text-sm font-semibold text-[#232c41]">Traditional SEO Audit</div>
                       <div className="flex items-center px-4 py-4 text-sm font-semibold text-[#232c41]">Rankio AI Visibility Report</div>
                     </div>
                     {comparisonRows.map((row, index) => (
                       <div
                         key={row.feature}
-                        className={`grid min-h-[92px] grid-cols-2 ${index !== comparisonRows.length - 1 ? "border-b border-[#edf0f7]" : ""}`}
+                        className={`grid h-[92px] grid-cols-2 ${index !== comparisonRows.length - 1 ? "border-b border-[#edf0f7]" : ""}`}
                       >
                         <div className="flex items-center px-4 py-4 text-sm text-[#5c677b]">{renderTraditionalStatus(row.traditional)}</div>
                         <div className="flex items-center px-4 py-4 text-sm text-[#5c677b]">{renderRankioStatus(row.rankio)}</div>
@@ -159,9 +159,9 @@ export function WhyRankio() {
               <table className="min-w-[720px] w-full border-collapse bg-white">
                 <thead>
                   <tr className="bg-[#f6f7ff] text-left">
-                    <th className="px-5 py-4 text-sm font-semibold text-[#232c41]">Feature</th>
-                    <th className="px-5 py-4 text-sm font-semibold text-[#232c41]">Traditional SEO Audit</th>
-                    <th className="px-5 py-4 text-sm font-semibold text-[#232c41]">Rankio AI Visibility Report</th>
+                    <th className="h-16 px-5 py-4 text-sm font-semibold text-[#232c41]">Feature</th>
+                    <th className="h-16 px-5 py-4 text-sm font-semibold text-[#232c41]">Traditional SEO Audit</th>
+                    <th className="h-16 px-5 py-4 text-sm font-semibold text-[#232c41]">Rankio AI Visibility Report</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -170,9 +170,9 @@ export function WhyRankio() {
                       key={row.feature}
                       className={index !== comparisonRows.length - 1 ? "border-b border-[#edf0f7]" : ""}
                     >
-                      <td className="px-5 py-4 text-sm font-medium text-[#232c41]">{row.feature}</td>
-                      <td className="px-5 py-4 text-sm text-[#5c677b]">{renderTraditionalStatus(row.traditional)}</td>
-                      <td className="px-5 py-4 text-sm text-[#5c677b]">{renderRankioStatus(row.rankio)}</td>
+                      <td className="h-[92px] px-5 py-4 text-sm font-medium text-[#232c41]">{row.feature}</td>
+                      <td className="h-[92px] px-5 py-4 text-sm text-[#5c677b]">{renderTraditionalStatus(row.traditional)}</td>
+                      <td className="h-[92px] px-5 py-4 text-sm text-[#5c677b]">{renderRankioStatus(row.rankio)}</td>
                     </tr>
                   ))}
                 </tbody>

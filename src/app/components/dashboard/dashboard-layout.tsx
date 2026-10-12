@@ -188,7 +188,7 @@ export function DashboardLayout() {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 py-5 md:py-8 md:pl-8">
+        <main className="min-w-0 flex-1 py-5 md:py-8 md:pl-8">
           <Outlet />
         </main>
       </div>

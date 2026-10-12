@@ -557,11 +557,12 @@ export function useSubscription() {
   return { subscription: data, loading, error };
 }
 
-export function useSubscriptionHistory() {
+export function useSubscriptionHistory(page = 1, pageSize = 10) {
   const { user, loading: authLoading } = useAuth();
   const [data, setData] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchHistory = useCallback(async () => {
     if (authLoading) {
@@ -576,21 +577,24 @@ export function useSubscriptionHistory() {
     }
 
     setLoading(true);
-    const { data: rows, error } = await supabase
+    const { data: rows, error, count } = await supabase
       .from("subscriptions")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(Math.max(page - 1, 0) * pageSize, Math.max(page - 1, 0) * pageSize + pageSize - 1);
 
     if (error) {
       setError(error.message);
       setData([]);
+      setTotalCount(0);
     } else {
       setError(null);
       setData(((rows ?? []) as Subscription[]).map((row) => normalizeSubscription(row)).filter(Boolean) as Subscription[]);
+      setTotalCount(count ?? 0);
     }
     setLoading(false);
-  }, [authLoading, user]);
+  }, [authLoading, page, pageSize, user]);
 
   useEffect(() => {
     void fetchHistory();
@@ -605,14 +609,15 @@ export function useSubscriptionHistory() {
     return () => window.removeEventListener("rankio:subscription-updated", handler);
   }, [user, fetchHistory]);
 
-  return { subscriptions: data, loading, error, refetch: fetchHistory };
+  return { subscriptions: data, loading, error, totalCount, refetch: fetchHistory };
 }
 
-export function usePaymentTransactions() {
+export function usePaymentTransactions(page = 1, pageSize = 10) {
   const { user, loading: authLoading } = useAuth();
   const [data, setData] = useState<PaymentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchTransactions = useCallback(async () => {
     if (authLoading) {
@@ -627,11 +632,12 @@ export function usePaymentTransactions() {
     }
 
     setLoading(true);
-    const { data: rows, error } = await supabase
+    const { data: rows, error, count } = await supabase
       .from("payment_transactions")
-      .select("id, user_id, subscription_id, provider, provider_order_id, provider_capture_id, provider_payer_id, status, plan_slug, plan_name, amount, currency, created_at")
+      .select("id, user_id, subscription_id, provider, provider_order_id, provider_capture_id, provider_payer_id, status, plan_slug, plan_name, amount, currency, created_at", { count: "exact" })
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(Math.max(page - 1, 0) * pageSize, Math.max(page - 1, 0) * pageSize + pageSize - 1);
 
     if (error) {
       if (isBillingAuditSchemaPending(error)) {
@@ -642,12 +648,14 @@ export function usePaymentTransactions() {
       }
       setError(error.message);
       setData([]);
+      setTotalCount(0);
     } else {
       setError(null);
       setData((rows ?? []) as PaymentTransaction[]);
+      setTotalCount(count ?? 0);
     }
     setLoading(false);
-  }, [authLoading, user]);
+  }, [authLoading, page, pageSize, user]);
 
   useEffect(() => {
     void fetchTransactions();
@@ -662,14 +670,15 @@ export function usePaymentTransactions() {
     return () => window.removeEventListener("rankio:subscription-updated", handler);
   }, [user, fetchTransactions]);
 
-  return { transactions: data, loading, error, refetch: fetchTransactions };
+  return { transactions: data, loading, error, totalCount, refetch: fetchTransactions };
 }
 
-export function useReportUnlockHistory() {
+export function useReportUnlockHistory(page = 1, pageSize = 10) {
   const { user, loading: authLoading } = useAuth();
   const [data, setData] = useState<ReportUnlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchUnlocks = useCallback(async () => {
     if (authLoading) {
@@ -684,7 +693,7 @@ export function useReportUnlockHistory() {
     }
 
     setLoading(true);
-    const { data: rows, error } = await supabase
+    const { data: rows, error, count } = await supabase
       .from("report_unlocks")
       .select(`
         id,
@@ -706,9 +715,10 @@ export function useReportUnlockHistory() {
             normalized_url
           )
         )
-      `)
+      `, { count: "exact" })
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(Math.max(page - 1, 0) * pageSize, Math.max(page - 1, 0) * pageSize + pageSize - 1);
 
     if (error) {
       if (isBillingAuditSchemaPending(error)) {
@@ -719,6 +729,7 @@ export function useReportUnlockHistory() {
       }
       setError(error.message);
       setData([]);
+      setTotalCount(0);
     } else {
       const unlockRows = (rows ?? []) as ReportUnlock[];
       const transactionIds = Array.from(
@@ -757,6 +768,7 @@ export function useReportUnlockHistory() {
       }
 
       setError(null);
+      setTotalCount(count ?? 0);
       setData(
         unlockRows.map((unlock) => ({
           ...unlock,
@@ -767,7 +779,7 @@ export function useReportUnlockHistory() {
       );
     }
     setLoading(false);
-  }, [authLoading, user]);
+  }, [authLoading, page, pageSize, user]);
 
   useEffect(() => {
     void fetchUnlocks();
@@ -782,6 +794,6 @@ export function useReportUnlockHistory() {
     return () => window.removeEventListener("rankio:subscription-updated", handler);
   }, [user, fetchUnlocks]);
 
-  return { unlocks: data, loading, error, refetch: fetchUnlocks };
+  return { unlocks: data, loading, error, totalCount, refetch: fetchUnlocks };
 }
 

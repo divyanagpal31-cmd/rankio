@@ -3625,25 +3625,25 @@ Website: ${displayHost}`);
 
   return (
     <>
-      <div className="rankio-report-page min-h-screen bg-[#0b1022] text-white">
+      <div className="rankio-report-page min-h-screen w-full min-w-0 overflow-x-hidden bg-[#0b1022] text-white">
         <header data-report-sticky-header className="report-screen-chrome sticky top-0 z-50 border-b border-border/40 bg-white backdrop-blur-md">
           <div className="container mx-auto max-w-7xl px-4 md:px-6">
-            <div className="flex h-20 items-center justify-between gap-4">
+            <div className="flex min-w-0 min-h-20 items-center justify-between gap-3 py-2 sm:gap-4">
               <div className="flex items-center gap-4">
                 <Link to="/" className="flex items-center gap-2">
                   <img src={darkLogo} alt="Rankio" className="h-10 w-auto sm:h-12" />
                 </Link>
               </div>
 
-              <div className="flex items-center gap-2">{headerRight}</div>
+              <div className="min-w-0 max-w-full overflow-x-auto">{headerRight}</div>
             </div>
           </div>
 
           {user && (
             <div className="border-t border-white/10 bg-[#0b1022]">
               <div className="container mx-auto max-w-7xl px-4 md:px-6">
-                <div className="flex min-h-12 items-center justify-between gap-4 overflow-x-auto py-2">
-                  <div className="flex min-w-0 shrink-0 items-center gap-3 whitespace-nowrap">
+                <div className="flex min-h-12 flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-3 overflow-x-auto whitespace-nowrap">
                   {user && (
                     <button
                       type="button"
@@ -3656,7 +3656,7 @@ Website: ${displayHost}`);
                   )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:whitespace-nowrap">
                   {!isGuest && activeReport?.website_id && (
                     <Button
                       variant="outline"
@@ -3707,7 +3707,7 @@ Website: ${displayHost}`);
           )}
         </header>
 
-        <main className="report-print-area container mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
+        <main className="report-print-area container mx-auto w-full min-w-0 max-w-7xl px-4 py-8 md:px-6 md:py-10">
           <section className="report-print-cover">
             <div>
               <p className="report-print-kicker">Rankio AI Visibility Report</p>
@@ -3791,7 +3791,7 @@ Website: ${displayHost}`);
               </div>
             </aside>
 
-            <div className="report-export-content space-y-8">
+            <div className="report-export-content min-w-0 space-y-8">
               <section id="executive-summary" className="report-section rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_28px_80px_rgba(0,0,0,0.18)] md:p-8">
                 <div className="mb-6 overflow-hidden rounded-[22px] border border-amber-400/25 bg-[linear-gradient(135deg,rgba(245,158,11,0.14),rgba(255,255,255,0.05)_52%,rgba(0,0,0,0.12))] p-5 text-sm text-amber-100 shadow-[0_18px_50px_rgba(0,0,0,0.16)]">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -4393,16 +4393,16 @@ Website: ${displayHost}`);
 
                   <div className="space-y-5">
                     {roadmapBuckets.map((bucket, index) => (
-                      <div key={bucket.title} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_48px_minmax(0,1fr)] lg:items-center">
-                        <div className={`${index % 2 === 0 ? "lg:col-start-1" : "lg:col-start-1"}`}>
+                      <div key={bucket.title} className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_48px_minmax(0,1fr)] lg:items-center lg:gap-4">
+                        <div className="order-1 lg:order-none lg:col-start-1">
                           {index % 2 === 0 ? <RoadmapCard bucket={bucket} isGuest={isGuest} /> : null}
                         </div>
-                        <div className="flex items-center justify-start lg:col-start-2 lg:justify-center">
+                        <div className="hidden items-center justify-start lg:order-none lg:col-start-2 lg:flex lg:justify-center">
                           <div className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-[#10162b] text-white/90 shadow-[0_12px_24px_rgba(0,0,0,0.2)]">
                             {index + 1}
                           </div>
                         </div>
-                        <div className={`${index % 2 === 1 ? "lg:col-start-3" : "lg:col-start-3"}`}>
+                        <div className="order-1 lg:order-none lg:col-start-3">
                           {index % 2 === 1 ? <RoadmapCard bucket={bucket} isGuest={isGuest} /> : null}
                         </div>
                       </div>
@@ -4569,7 +4569,7 @@ Website: ${displayHost}`);
       <Dialog open={callbackOpen} onOpenChange={setCallbackOpen}>
         <DialogContent
           onOpenAutoFocus={(event) => event.preventDefault()}
-          className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden border-slate-200 bg-white p-0 text-slate-950 shadow-[0_30px_100px_rgba(15,23,42,0.28)] sm:max-w-2xl"
+          className="flex h-[min(760px,calc(100dvh-1rem))] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] min-w-0 flex-col overflow-hidden border-slate-200 bg-white p-0 text-slate-950 shadow-[0_30px_100px_rgba(15,23,42,0.28)] sm:max-w-2xl"
         >
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg">
             <div className="relative flex min-h-0 flex-1 flex-col">
@@ -4717,11 +4717,11 @@ Website: ${displayHost}`);
                 </div>
               ) : null}
 
-              <DialogFooter className="shrink-0 gap-3 border-t border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
-                <Button variant="outline" onClick={() => setCallbackOpen(false)} disabled={callbackSubmitting}>
+              <DialogFooter className="shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3 sm:flex-row sm:gap-3 sm:px-6">
+                <Button className="w-full sm:w-auto" variant="outline" onClick={() => setCallbackOpen(false)} disabled={callbackSubmitting}>
                   Close
                 </Button>
-                <Button onClick={handleSubmitCallbackRequest} disabled={callbackSubmitting || callbackSubmitted}>
+                <Button className="w-full sm:w-auto" onClick={handleSubmitCallbackRequest} disabled={callbackSubmitting || callbackSubmitted}>
                   {callbackSubmitting ? "Submitting..." : callbackSubmitted ? "Request submitted" : "Submit request"}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>

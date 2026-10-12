@@ -3733,6 +3733,42 @@ Website: ${displayHost}`);
               </div>
             </div>
           </section>
+          <div className="report-mobile-section-nav sticky top-20 z-30 -mx-4 overflow-x-auto border-y border-white/10 bg-[#0b1022]/95 px-4 py-3 backdrop-blur-xl lg:hidden">
+            <nav className="flex min-w-max items-center gap-2" aria-label="Report sections">
+              {[
+                { id: "executive-summary", label: "Executive Summary", icon: BarChart3 },
+                { id: "ai-audit", label: "AI Visibility Audit", icon: Bot },
+                { id: "implementation-plan", label: "Findings & Fixes", icon: ShieldCheck },
+                { id: "roadmap", label: "Improvement Roadmap", icon: Rocket },
+              ].map((item) => {
+                const isLockedGuestTab = isGuest && item.id !== "executive-summary";
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={isLockedGuestTab}
+                    title={isLockedGuestTab ? "Premium Feature" : undefined}
+                    onClick={() => {
+                      if (isLockedGuestTab) return;
+                      setActiveSection(item.id);
+                      scrollToReportSection(item.id);
+                    }}
+                    className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition-all ${
+                      activeSection === item.id
+                        ? "border-white/15 bg-accent text-white shadow-[0_8px_18px_hsl(var(--accent)/0.25)]"
+                        : isLockedGuestTab
+                          ? "cursor-not-allowed border-white/8 bg-white/[0.02] text-white/35 opacity-55"
+                          : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <item.icon className="h-3.5 w-3.5 shrink-0" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
           <div className="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
             <aside className="report-sidebar hidden lg:block">
               <div className="sticky top-[7.5rem] rounded-[24px] border border-white/10 bg-white/5 p-5 backdrop-blur-xl">

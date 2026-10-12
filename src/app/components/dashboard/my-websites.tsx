@@ -554,9 +554,9 @@ export function MyWebsites() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
+    <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden">
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl text-primary" style={{ fontWeight: 700 }}>
             Reports
           </h1>
@@ -566,7 +566,7 @@ export function MyWebsites() {
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
         <Button
-          className="gap-2"
+          className="w-full gap-2 sm:w-auto"
           onClick={() => {
             setNewWebsiteUrl("");
             setNewWebsiteError(null);
@@ -582,9 +582,9 @@ export function MyWebsites() {
       </div>
 
       {!!user && (
-        <Card className="border-border/40 shadow-sm">
-          <CardContent className="grid gap-5 p-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-            <div className="space-y-2">
+        <Card className="min-w-0 border-border/40 shadow-sm">
+          <CardContent className="grid min-w-0 gap-5 p-4 sm:p-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="reportSearch" className="text-sm font-medium text-primary">Search</Label>
               <Input
                 id="reportSearch"
@@ -594,7 +594,7 @@ export function MyWebsites() {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="websiteFilter" className="text-sm font-medium text-primary">Website</Label>
               <select
                 id="websiteFilter"
@@ -610,7 +610,7 @@ export function MyWebsites() {
                 ))}
               </select>
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="statusFilter" className="text-sm font-medium text-primary">Status</Label>
               <select
                 id="statusFilter"
@@ -628,7 +628,7 @@ export function MyWebsites() {
               </select>
             </div>
 
-            <div className="flex items-end">
+            <div className="flex min-w-0 items-end">
               <Button
                 type="button"
                 variant="outline"
@@ -648,7 +648,7 @@ export function MyWebsites() {
 
       <div ref={reportsListTopRef} className="scroll-mt-24" />
 
-      <div className="grid gap-4">
+      <div className="grid min-w-0 gap-4">
         {loading && <p className="text-muted-foreground">Loading reports...</p>}
         {actionError && <p className="text-sm text-red-500">{actionError}</p>}
         {renderPagination()}
@@ -670,7 +670,7 @@ export function MyWebsites() {
           return (
           <Card
             key={website.id}
-            className="border-border/40 bg-white shadow-sm transition-all hover:border-accent/25 hover:shadow-lg hover:shadow-accent/5"
+            className="min-w-0 max-w-full border-border/40 bg-white shadow-sm transition-all hover:border-accent/25 hover:shadow-lg hover:shadow-accent/5"
             role="button"
             tabIndex={0}
             onClick={() => openLatestReport(website)}
@@ -681,9 +681,9 @@ export function MyWebsites() {
               }
             }}
           >
-            <CardContent className="p-5 sm:p-6">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex-1 space-y-3">
+            <CardContent className="min-w-0 p-4 sm:p-6">
+              <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0 flex-1 space-y-3">
                   <div className="flex items-start gap-3">
                     <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center flex-shrink-0">
                       <Globe className="h-5 w-5 text-white" />
@@ -713,7 +713,7 @@ export function MyWebsites() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:gap-6">
+                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center lg:gap-6">
                   <div className="flex items-center gap-3">
                     <div className="relative h-20 w-20 shrink-0">
                       <svg className="h-full w-full -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
@@ -757,7 +757,7 @@ export function MyWebsites() {
                     </div>
                   </div>
 
-                  <div className="flex min-w-[180px] flex-col gap-2">
+                  <div className="flex w-full min-w-0 flex-col gap-2 sm:min-w-[180px] sm:flex-1 lg:w-auto lg:flex-none">
                     <div className="flex flex-col gap-1.5">
                       <Button
                         variant="outline"

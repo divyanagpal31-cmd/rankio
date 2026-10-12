@@ -232,8 +232,8 @@ export function ScanningModal({ open, onOpenChange, websiteUrl, isComplete = fal
             </div>
 
             <div className="mt-4 grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_25dvh] gap-4 md:mt-6 md:grid-cols-[300px_minmax(420px,1fr)] md:grid-rows-none md:items-center md:gap-8">
-              <div className="min-h-0 overflow-y-auto pr-1 md:flex md:shrink-0 md:flex-col md:items-center md:gap-4 md:overflow-visible">
-                <div className="relative h-48 w-48">
+              <div className="flex min-h-0 w-full flex-col items-center gap-4 overflow-y-auto pr-1 md:shrink-0 md:overflow-visible">
+                <div className="relative h-48 w-48 shrink-0">
                   <motion.div
                     className="absolute inset-0 rounded-full bg-accent/25 blur-2xl"
                     animate={{ scale: [1, 1.14, 1], opacity: [0.4, 0.75, 0.4] }}
